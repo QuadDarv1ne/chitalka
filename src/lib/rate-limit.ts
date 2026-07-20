@@ -1,0 +1,133 @@
+import 'server-only'
+
+/**
+ * In-memory rate limiter (single-instance, suitable for dev/small deployments).
+ * For production multi-instance setups, replace with Redis-based implementation.
+ */
+
+interface RateLimitEntry {
+  count: number
+  firstRequestAt: number
+  blockedUntil?: number
+}
+
+const buckets = new Map<string, RateLimitEntry>()
+
+interface RateLimitOptions {
+  /** Maximum requests allowed in the window */
+  max: number
+  /** Time window in ms */
+  windowMs: number
+  /** Block duration after exceeding limit (ms). Default: windowMs */
+  blockMs?: number
+}
+
+interface RateLimitResult {
+  ok: boolean
+  remaining: number
+  retryAfter?: number // ms
+}
+
+/**
+ * Check rate limit for a given key.
+ * Returns { ok: false } if limit exceeded.
+ */
+export function checkRateLimit(
+  key: string,
+  options: RateLimitOptions,
+): RateLimitResult {
+  const now = Date.now()
+  const blockMs = options.blockMs ?? options.windowMs
+  const entry = buckets.get(key)
+
+  // Currently blocked?
+  if (entry?.blockedUntil && entry.blockedUntil > now) {
+    return {
+      ok: false,
+      remaining: 0,
+      retryAfter: entry.blockedUntil - now,
+    }
+  }
+
+  // Reset if window expired
+  if (!entry || now - entry.firstRequestAt > options.windowMs) {
+    buckets.set(key, {
+      count: 1,
+      firstRequestAt: now,
+    })
+    return { ok: true, remaining: options.max - 1 }
+  }
+
+  // Increment
+  entry.count += 1
+  if (entry.count > options.max) {
+    entry.blockedUntil = now + blockMs
+    return {
+      ok: false,
+      remaining: 0,
+      retryAfter: blockMs,
+    }
+  }
+
+  return {
+    ok: true,
+    remaining: options.max - entry.count,
+  }
+}
+
+/**
+ * Get client identifier for rate limiting.
+ * Combines IP + endpoint for per-endpoint limits.
+ */
+export function getRateLimitKey(req: Request, endpoint: string): string {
+  const forwarded = req.headers.get('x-forwarded-for')
+  const ip = forwarded?.split(',')[0].trim() || req.headers.get('x-real-ip') || 'unknown'
+  return `${ip}:${endpoint}`
+}
+
+/**
+ * Standard rate limits for auth endpoints.
+ * - Login: 10 attempts per 15 min, then block 15 min
+ * - Register: 5 per hour, then block 1 hour
+ * - Forgot password: 5 per hour, then block 1 hour
+ * - Reset password: 10 per hour
+ * - Resend verification: 3 per hour
+ */
+export const RATE_LIMITS = {
+  login: { max: 10, windowMs: 15 * 60 * 1000, blockMs: 15 * 60 * 1000 },
+  register: { max: 5, windowMs: 60 * 60 * 1000, blockMs: 60 * 60 * 1000 },
+  forgotPassword: { max: 5, windowMs: 60 * 60 * 1000, blockMs: 60 * 60 * 1000 },
+  resetPassword: { max: 10, windowMs: 60 * 60 * 1000, blockMs: 30 * 60 * 1000 },
+  resendVerification: { max: 3, windowMs: 60 * 60 * 1000, blockMs: 30 * 60 * 1000 },
+  verifyEmail: { max: 20, windowMs: 60 * 60 * 1000 },
+} as const
+
+/**
+ * Apply rate limit and return NextResponse-friendly error if exceeded.
+ */
+export function applyRateLimit(
+  req: Request,
+  endpoint: keyof typeof RATE_LIMITS,
+): { ok: true } | { ok: false; retryAfter: number } {
+  const key = getRateLimitKey(req, endpoint)
+  const result = checkRateLimit(key, RATE_LIMITS[endpoint])
+  if (!result.ok) {
+    return { ok: false, retryAfter: result.retryAfter ?? 0 }
+  }
+  return { ok: true }
+}
+
+/**
+ * Cleanup old entries periodically (called from any request).
+ * Keeps memory bounded.
+ */
+export function cleanupRateLimits(): void {
+  const now = Date.now()
+  const maxAge = 2 * 60 * 60 * 1000 // 2 hours
+  for (const [key, entry] of buckets.entries()) {
+    const age = now - entry.firstRequestAt
+    if (age > maxAge && (!entry.blockedUntil || entry.blockedUntil < now)) {
+      buckets.delete(key)
+    }
+  }
+}

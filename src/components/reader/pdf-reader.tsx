@@ -1,0 +1,232 @@
+'use client'
+
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ChevronLeft, ChevronRight, Loader2, ZoomIn, ZoomOut } from 'lucide-react'
+import type { BookRecord } from '@/lib/library'
+import { useReaderStore } from '@/store/reader-store'
+
+interface Props {
+  book: BookRecord
+  onProgress: (p: number, extra?: { pdfPage?: number }) => void
+}
+
+export function PdfReader({ book, onProgress }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const docRef = useRef<any>(null)
+  const [totalPages, setTotalPages] = useState(0)
+  const [page, setPage] = useState(book.pdfPage ?? 1)
+  const [loading, setLoading] = useState(true)
+  const [pageLoading, setPageLoading] = useState(false)
+  const [scale, setScale] = useState(1.2)
+  const [pageInput, setPageInput] = useState(String(page))
+  const settings = useReaderStore((s) => s.settings)
+
+  // Load PDF document
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    ;(async () => {
+      try {
+        const pdfjs = await import('pdfjs-dist')
+        // @ts-expect-error — worker URL for bundlers
+        pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.mjs?url')).default
+        const data = await book.blob.arrayBuffer()
+        const doc = await pdfjs.getDocument({ data }).promise
+        if (cancelled) return
+        docRef.current = doc
+        setTotalPages(doc.numPages)
+        setLoading(false)
+      } catch (e) {
+        console.error('PDF load failed', e)
+        setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+      try {
+        docRef.current?.destroy?.()
+      } catch {}
+    }
+  }, [book.id, book.blob])
+
+  // Render current page
+  const renderPage = useCallback(
+    async (pageNum: number, renderScale: number) => {
+      const doc = docRef.current
+      const canvas = canvasRef.current
+      if (!doc || !canvas) return
+      setPageLoading(true)
+      try {
+        const pdfPage = await doc.getPage(pageNum)
+        const viewport = pdfPage.getViewport({ scale: renderScale })
+        // Apply device pixel ratio for crisp text
+        const dpr = window.devicePixelRatio || 1
+        canvas.width = viewport.width * dpr
+        canvas.height = viewport.height * dpr
+        canvas.style.width = `${viewport.width}px`
+        canvas.style.height = `${viewport.height}px`
+        const ctx = canvas.getContext('2d')!
+        ctx.scale(dpr, dpr)
+        await pdfPage.render({
+          canvasContext: ctx,
+          viewport,
+          canvas,
+        } as any).promise
+        // Apply theme to canvas background
+        const bg =
+          settings.theme === 'dark' || settings.theme === 'contrast'
+            ? '#2a2a2a'
+            : '#ffffff'
+        canvas.style.background = bg
+      } catch (e) {
+        console.error('PDF render failed', e)
+      } finally {
+        setPageLoading(false)
+      }
+    },
+    [settings.theme],
+  )
+
+  useEffect(() => {
+    if (!loading && docRef.current) {
+      renderPage(page, scale)
+      const progress = totalPages > 0 ? page / totalPages : 0
+      onProgress(progress, { pdfPage: page })
+      setPageInput(String(page))
+    }
+  }, [page, scale, loading, totalPages])
+
+  const prev = useCallback(() => {
+    setPage((p) => Math.max(1, p - 1))
+  }, [])
+  const next = useCallback(() => {
+    setPage((p) => Math.min(totalPages, p + 1))
+  }, [totalPages])
+
+  const goToPage = useCallback(
+    (n: number) => {
+      if (n >= 1 && n <= totalPages) {
+        setPage(n)
+      }
+    },
+    [totalPages],
+  )
+
+  // Keyboard nav
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement) return
+      if (e.key === 'ArrowLeft') prev()
+      else if (e.key === 'ArrowRight') next()
+      else if (e.key === '+' || e.key === '=') setScale((s) => Math.min(3, s + 0.2))
+      else if (e.key === '-') setScale((s) => Math.max(0.5, s - 0.2))
+    }
+    const onGotoPage = (e: Event) => {
+      const p = (e as CustomEvent<number>).detail
+      if (typeof p === 'number') goToPage(p)
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pdf-goto-page', onGotoPage)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pdf-goto-page', onGotoPage)
+    }
+  }, [prev, next, goToPage])
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative flex flex-col items-center overflow-auto"
+      style={{
+        background: 'var(--reader-bg)',
+        height: 'calc(100vh - 6.5rem)',
+      }}
+    >
+      <div className="sticky top-2 z-10 flex items-center gap-2 rounded-full border bg-background/80 px-2 py-1 backdrop-blur shadow-sm">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={prev}
+          disabled={page <= 1}
+          className="h-8 w-8"
+          aria-label="Назад"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            goToPage(parseInt(pageInput, 10) || 1)
+          }}
+          className="flex items-center gap-1"
+        >
+          <Input
+            value={pageInput}
+            onChange={(e) => setPageInput(e.target.value)}
+            className="h-8 w-12 text-center text-sm"
+            type="number"
+            min={1}
+            max={totalPages}
+          />
+          <span className="text-xs text-muted-foreground">/ {totalPages}</span>
+        </form>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={next}
+          disabled={page >= totalPages}
+          className="h-8 w-8"
+          aria-label="Вперёд"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <div className="mx-1 h-4 w-px bg-border" />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setScale((s) => Math.max(0.5, s - 0.2))}
+          className="h-8 w-8"
+          aria-label="Уменьшить"
+        >
+          <ZoomOut className="h-4 w-4" />
+        </Button>
+        <span className="text-xs tabular-nums w-10 text-center">
+          {Math.round(scale * 100)}%
+        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setScale((s) => Math.min(3, s + 0.2))}
+          className="h-8 w-8"
+          aria-label="Увеличить"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="relative flex justify-center py-4">
+        {pageLoading && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
+        <canvas
+          ref={canvasRef}
+          className="shadow-lg rounded-sm"
+          style={{ background: '#fff' }}
+        />
+      </div>
+    </div>
+  )
+}
