@@ -16,7 +16,7 @@ interface Props {
 export function PdfReader({ book, onProgress }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const docRef = useRef<any>(null)
+  const docRef = useRef<import('pdfjs-dist').PDFDocumentProxy | null>(null)
   const onProgressRef = useRef(onProgress)
   const [totalPages, setTotalPages] = useState(0)
   const [page, setPage] = useState(book.pdfPage ?? 1)
@@ -50,7 +50,7 @@ export function PdfReader({ book, onProgress }: Props) {
     return () => {
       cancelled = true
       try {
-        docRef.current?.destroy?.()
+        docRef.current?.cleanup()
       } catch {}
     }
   }, [book.id, book.blob])

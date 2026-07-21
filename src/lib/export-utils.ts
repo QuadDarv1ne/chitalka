@@ -1,6 +1,6 @@
 'use client'
 
-import type { Highlight } from '@/store/reader-store'
+import type { Highlight, ReaderSettings, Bookmark, ReadingSession } from '@/store/reader-store'
 import type { BookRecord } from '@/lib/library'
 import { highlightColors } from '@/store/reader-store'
 
@@ -59,10 +59,10 @@ export function exportHighlightsToMarkdown(
  */
 export async function exportLibraryBackup(
   getAllBooks: () => Promise<BookRecord[]>,
-  settings: any,
-  bookmarks: any[],
-  highlights: any[],
-  sessions: any[],
+  settings: ReaderSettings,
+  bookmarks: Bookmark[],
+  highlights: Highlight[],
+  sessions: ReadingSession[],
 ): Promise<void> {
   const books = await getAllBooks()
   // Strip blob (too large) - keep metadata only

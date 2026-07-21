@@ -72,7 +72,7 @@ export async function PUT(req: Request) {
     } = body ?? {}
 
     // Validate
-    const data: any = {}
+    const data: Record<string, unknown> = {}
     if (theme !== undefined) {
       if (!VALID_THEMES.includes(theme)) {
         return NextResponse.json({ error: 'Некорректная тема' }, { status: 400 })
