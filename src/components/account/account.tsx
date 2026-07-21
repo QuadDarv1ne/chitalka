@@ -138,7 +138,6 @@ export function Account() {
       if (res.ok) {
         toast.success('Письмо отправлено')
         if (data._devVerifyLink) {
-          // Show dev link in a dialog or just copy to clipboard
           navigator.clipboard.writeText(data._devVerifyLink)
           toast.info('Dev-ссылка скопирована в буфер обмена', {
             description: data._devVerifyLink,
@@ -147,6 +146,8 @@ export function Account() {
       } else {
         toast.error(data.error || 'Ошибка')
       }
+    } catch {
+      toast.error('Ошибка сети')
     } finally {
       setSendingVerify(false)
     }

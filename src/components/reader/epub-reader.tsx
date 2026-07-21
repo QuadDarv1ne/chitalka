@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import ePub, { type Book, type Rendition } from 'epubjs'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
-import { useReaderStore, fontFamilyCss } from '@/store/reader-store'
+import { useReaderStore, fontFamilyCss, themeBg, themeFg } from '@/store/reader-store'
 
 interface Props {
   book: BookRecord
@@ -16,10 +16,13 @@ export function EpubReader({ book, onProgress }: Props) {
   const viewerRef = useRef<HTMLDivElement>(null)
   const bookRef = useRef<Book | null>(null)
   const renditionRef = useRef<Rendition | null>(null)
+  const onProgressRef = useRef(onProgress)
   const [ready, setReady] = useState(false)
   const [hasPrev, setHasPrev] = useState(false)
   const [hasNext, setHasNext] = useState(false)
   const settings = useReaderStore((s) => s.settings)
+
+  onProgressRef.current = onProgress
 
   // Navigation helpers (declared before effects that use them)
   const prev = useCallback(() => {
@@ -78,7 +81,7 @@ export function EpubReader({ book, onProgress }: Props) {
       const cfi = location.start.cfi
       const percent = location.start.percentage || 0
       // Persist CFI on book record
-      onProgress(percent, { cfi })
+      onProgressRef.current(percent, { cfi })
       updateNavButtons()
     }
     rendition.on('relocated', onLocated)
@@ -142,22 +145,8 @@ export function EpubReader({ book, onProgress }: Props) {
     if (!rendition) return
 
     const themes = rendition.themes
-    const bg =
-      settings.theme === 'light'
-        ? '#fafaf7'
-        : settings.theme === 'sepia'
-          ? '#f4ecd8'
-          : settings.theme === 'dark'
-            ? '#1a1a1a'
-            : '#000000'
-    const fg =
-      settings.theme === 'light'
-        ? '#1c1c1c'
-        : settings.theme === 'sepia'
-          ? '#5b4636'
-          : settings.theme === 'dark'
-            ? '#d4d4d4'
-            : '#ffffff'
+    const bg = themeBg[settings.theme]
+    const fg = themeFg[settings.theme]
 
     themes.register('custom', {
       body: {
@@ -183,7 +172,7 @@ export function EpubReader({ book, onProgress }: Props) {
     })
     themes.select('custom')
     // Force re-render to apply
-    rendition.resize?.()
+    ;(rendition.resize as any)?.()
   }, [settings])
 
   return (

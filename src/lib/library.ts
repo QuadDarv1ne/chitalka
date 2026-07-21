@@ -36,7 +36,7 @@ function getDB() {
   }
   if (!dbPromise) {
     dbPromise = openDB<LibraryDB>('reader-library', 2, {
-      upgrade(db, oldVersion, transaction) {
+      upgrade(db, oldVersion, _newVersion, transaction) {
         if (oldVersion < 1) {
           const store = db.createObjectStore('books', { keyPath: 'id' })
           store.createIndex('by-addedAt', 'addedAt')

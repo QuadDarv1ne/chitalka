@@ -1,6 +1,7 @@
 'use client'
 
-import type { Highlight, BookRecord } from '@/lib/library'
+import type { Highlight } from '@/store/reader-store'
+import type { BookRecord } from '@/lib/library'
 import { highlightColors } from '@/store/reader-store'
 
 /**

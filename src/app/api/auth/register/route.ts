@@ -54,7 +54,7 @@ export async function POST(req: Request) {
     })
     if (existing) {
       return NextResponse.json(
-        { error: 'Пользователь с таким email уже существует' },
+        { error: 'Не удалось создать аккаунт. Попробуйте другой email или войдите, если аккаунт уже существует.' },
         { status: 409 },
       )
     }

@@ -12,6 +12,7 @@ import {
   Play,
 } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
+import { PAGE_WORDS } from '@/lib/constants'
 import {
   useReaderStore,
   fontFamilyCss,
@@ -28,8 +29,6 @@ interface Props {
   book: BookRecord
   onProgress: (p: number, extra?: { cfi?: string; textPosition?: number }) => void
 }
-
-const PAGE_WORDS = 350
 
 export function TxtReader({ book, onProgress }: Props) {
   const [content, setContent] = useState<string>('')
@@ -273,7 +272,10 @@ export function TxtReader({ book, onProgress }: Props) {
       return
     }
     const text = currentPage.replace(/[#*_`>-]/g, '').replace(/\n+/g, ' ')
-    tts.speak(text, { rate: settings.ttsRate })
+    const voice = settings.ttsVoice
+      ? window.speechSynthesis.getVoices().find((v) => v.name === settings.ttsVoice) ?? null
+      : null
+    tts.speak(text, { rate: settings.ttsRate, voice })
   }
 
   const readerStyle: React.CSSProperties = {

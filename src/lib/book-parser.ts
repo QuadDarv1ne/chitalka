@@ -1,6 +1,7 @@
 'use client'
 
 import type { BookRecord } from '@/lib/library'
+import { initPdfWorker } from '@/lib/pdf-worker'
 
 export interface ParsedBook {
   title: string
@@ -51,7 +52,7 @@ export async function parseEpubMeta(
       const coverPath = resolvePath(opfPath, meta.manifest[coverId])
       const coverEntry = entries[coverPath]
       if (coverEntry) {
-        const blob = new Blob([coverEntry])
+        const blob = new Blob([coverEntry.buffer as ArrayBuffer])
         cover = await blobToDataURL(blob)
       }
     }
@@ -329,8 +330,7 @@ export async function parsePdfMeta(file: File): Promise<ParsedBook> {
   }
   try {
     const pdfjs = await import('pdfjs-dist')
-    // @ts-expect-error — worker URL for bundlers
-    pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.mjs?url')).default
+    await initPdfWorker()
     const data = await file.arrayBuffer()
     const doc = await pdfjs.getDocument({ data }).promise
     const meta = await doc.getMetadata().catch(() => null)

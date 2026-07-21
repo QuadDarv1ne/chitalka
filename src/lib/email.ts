@@ -38,6 +38,7 @@ export interface SentEmail extends EmailMessage {
 }
 
 const sentEmails: SentEmail[] = []
+const MAX_STORED_EMAILS = 100
 
 export async function sendEmail(
   message: EmailMessage,
@@ -51,6 +52,10 @@ export async function sendEmail(
     previewUrl: message.html.match(/href="([^"]*reset[^"]*)"/)?.[1],
   }
   sentEmails.push(sent)
+  // Keep memory bounded
+  if (sentEmails.length > MAX_STORED_EMAILS) {
+    sentEmails.splice(0, sentEmails.length - MAX_STORED_EMAILS)
+  }
 
   // Log to console (visible in dev.log)
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')

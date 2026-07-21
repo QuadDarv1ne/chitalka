@@ -128,14 +128,11 @@ export function Reader() {
 
   const openSidebar = (tab: SidebarTab) => {
     setActiveTab(tab)
-    setBookmarksOpen(false)
-    setTocOpen(false)
-    if (tab === 'toc') setTocOpen(true)
-    else if (tab === 'bookmarks') setBookmarksOpen(true)
-    else if (tab === 'highlights') {
-      // Use tocOpen sheet but with highlights content
-      setTocOpen(true)
-    }
+    // Close all panels first, then open the requested one
+    const shouldOpenSidebar = tab === 'bookmarks'
+    const shouldOpenToc = tab === 'toc' || tab === 'highlights'
+    setBookmarksOpen(shouldOpenSidebar)
+    setTocOpen(shouldOpenToc)
     setSettingsOpen(false)
   }
 

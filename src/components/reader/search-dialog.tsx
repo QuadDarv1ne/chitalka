@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button'
 import { Search, ChevronUp, ChevronDown, X } from 'lucide-react'
 import { useReaderStore } from '@/store/reader-store'
 import type { BookRecord } from '@/lib/library'
+import { PAGE_WORDS } from '@/lib/constants'
+import { initPdfWorker } from '@/lib/pdf-worker'
 
 interface Props {
   book: BookRecord
@@ -59,9 +61,8 @@ export function SearchDialog({ book }: Props) {
         const q = query.toLowerCase()
         const found: SearchResult[] = []
         let idx = lower.indexOf(q)
-        const wordsPerPage = 350
         while (idx !== -1 && found.length < 100) {
-          const pageNum = Math.floor(idx / wordsPerPage) + 1
+          const pageNum = Math.floor(idx / PAGE_WORDS) + 1
           const start = Math.max(0, idx - 50)
           const end = Math.min(textContent.length, idx + query.length + 50)
           const snippet =
@@ -79,8 +80,7 @@ export function SearchDialog({ book }: Props) {
       } else if (book.format === 'pdf') {
         // Search PDF pages via pdfjs
         const pdfjs = await import('pdfjs-dist')
-        // @ts-expect-error — worker URL
-        pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.mjs?url')).default
+        await initPdfWorker()
         const data = await book.blob.arrayBuffer()
         const doc = await pdfjs.getDocument({ data }).promise
         const found: SearchResult[] = []
@@ -111,7 +111,7 @@ export function SearchDialog({ book }: Props) {
         const spine = await epubBook.spine
         const found: SearchResult[] = []
         const q = query.toLowerCase()
-        for (const item of spine.items) {
+        for (const item of (spine as any).items) {
           if (found.length >= 50) break
           try {
             const doc = await item.load(epubBook.load.bind(epubBook))

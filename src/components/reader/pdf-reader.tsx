@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { ChevronLeft, ChevronRight, Loader2, ZoomIn, ZoomOut } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
 import { useReaderStore } from '@/store/reader-store'
+import { initPdfWorker } from '@/lib/pdf-worker'
 
 interface Props {
   book: BookRecord
@@ -16,6 +17,7 @@ export function PdfReader({ book, onProgress }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const docRef = useRef<any>(null)
+  const onProgressRef = useRef(onProgress)
   const [totalPages, setTotalPages] = useState(0)
   const [page, setPage] = useState(book.pdfPage ?? 1)
   const [loading, setLoading] = useState(true)
@@ -24,6 +26,8 @@ export function PdfReader({ book, onProgress }: Props) {
   const [pageInput, setPageInput] = useState(String(page))
   const settings = useReaderStore((s) => s.settings)
 
+  onProgressRef.current = onProgress
+
   // Load PDF document
   useEffect(() => {
     let cancelled = false
@@ -31,8 +35,7 @@ export function PdfReader({ book, onProgress }: Props) {
     ;(async () => {
       try {
         const pdfjs = await import('pdfjs-dist')
-        // @ts-expect-error — worker URL for bundlers
-        pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.mjs?url')).default
+        await initPdfWorker()
         const data = await book.blob.arrayBuffer()
         const doc = await pdfjs.getDocument({ data }).promise
         if (cancelled) return
@@ -94,10 +97,10 @@ export function PdfReader({ book, onProgress }: Props) {
     if (!loading && docRef.current) {
       renderPage(page, scale)
       const progress = totalPages > 0 ? page / totalPages : 0
-      onProgress(progress, { pdfPage: page })
+      onProgressRef.current(progress, { pdfPage: page })
       setPageInput(String(page))
     }
-  }, [page, scale, loading, totalPages])
+  }, [page, scale, loading, totalPages, renderPage])
 
   const prev = useCallback(() => {
     setPage((p) => Math.max(1, p - 1))

@@ -5,6 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { BookOpen, ChevronRight, FileText } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
 import { Button } from '@/components/ui/button'
+import { initPdfWorker } from '@/lib/pdf-worker'
 
 interface TocItem {
   id: string
@@ -54,8 +55,7 @@ export function TocPanel({ book, onNavigate }: Props) {
       } else if (book.format === 'pdf') {
         try {
           const pdfjs = await import('pdfjs-dist')
-          // @ts-expect-error — worker URL
-          pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.mjs?url')).default
+          await initPdfWorker()
           const data = await book.blob.arrayBuffer()
           const doc = await pdfjs.getDocument({ data }).promise
           const items: TocItem[] = []

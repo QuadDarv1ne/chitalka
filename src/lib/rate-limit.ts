@@ -131,3 +131,8 @@ export function cleanupRateLimits(): void {
     }
   }
 }
+
+// Auto-cleanup every 10 minutes
+if (typeof setInterval !== 'undefined') {
+  setInterval(cleanupRateLimits, 10 * 60 * 1000)
+}

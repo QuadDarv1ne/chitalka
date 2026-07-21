@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { hashPassword, createSession, getSessionCookieName, getSessionDuration } from '@/lib/auth'
+import { hashPassword, createSession, getSessionCookieName, getSessionDuration, getClientIp, getUserAgent } from '@/lib/auth'
 import { cookies } from 'next/headers'
 
 export async function POST(req: Request) {
@@ -48,11 +48,14 @@ export async function POST(req: Request) {
     ])
 
     // Auto-login the user after reset
-    const sessionToken = await createSession({
-      userId: updatedUser.id,
-      email: updatedUser.email,
-      name: updatedUser.name,
-    })
+    const { token: sessionToken } = await createSession(
+      {
+        userId: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+      },
+      { userAgent: getUserAgent(req), ip: getClientIp(req) },
+    )
 
     const cookieStore = await cookies()
     cookieStore.set(getSessionCookieName(), sessionToken, {

@@ -59,7 +59,7 @@ import { exportLibraryBackup } from '@/lib/export-utils'
 import { UserMenu } from '@/components/auth/user-menu'
 
 type SortKey = 'recent' | 'title' | 'added'
-type FormatFilter = 'all' | 'epub' | 'pdf' | 'txt' | 'md' | 'fb2'
+type FormatFilter = 'all' | 'epub' | 'pdf' | 'txt' | 'md' | 'fb2' | 'html'
 
 export function Library() {
   const [books, setBooks] = useState<BookRecord[]>([])
@@ -315,7 +315,7 @@ export function Library() {
                 <DropdownMenuItem onClick={() => setFormatFilter('all')}>
                   Все форматы
                 </DropdownMenuItem>
-                {(['epub', 'pdf', 'fb2', 'txt', 'md'] as FormatFilter[]).map((f) => (
+                {(['epub', 'pdf', 'fb2', 'txt', 'md', 'html'] as FormatFilter[]).map((f) => (
                   <DropdownMenuItem key={f} onClick={() => setFormatFilter(f)}>
                     {f.toUpperCase()} {formatCounts[f] ? `(${formatCounts[f]})` : ''}
                   </DropdownMenuItem>

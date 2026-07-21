@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ResetPasswordWatcher } from "@/components/auth/reset-password-watcher";
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   description: "Удобная и функциональная читалка для EPUB, FB2, PDF, TXT, Markdown. Локальное хранение, темы оформления, закладки.",
   keywords: ["читалка", "epub", "fb2", "pdf", "txt", "книги", "reader"],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/logo.svg",
   },
 };
 
