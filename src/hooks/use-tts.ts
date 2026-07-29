@@ -83,7 +83,10 @@ export function useTTS() {
       }
       u.onend = () => {
         if (cancelledRef.current) return
-        if (i === chunks.length - 1) {
+        const next = i + 1
+        if (next < chunks.length) {
+          window.speechSynthesis.speak(utterances[next])
+        } else {
           setState({
             speaking: false,
             paused: false,
@@ -104,7 +107,7 @@ export function useTTS() {
       return u
     })
     utterancesRef.current = utterances
-    for (const u of utterances) window.speechSynthesis.speak(u)
+    if (chunks.length > 0) window.speechSynthesis.speak(utterances[0])
   }, [])
 
   const pause = useCallback(() => {

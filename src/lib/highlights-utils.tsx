@@ -27,40 +27,49 @@ export function splitWithHighlights(
     while (from < text.length) {
       const idx = text.indexOf(h.text, from)
       if (idx === -1) break
-      // Avoid overlap with existing matches
-      const overlaps = matches.some(
-        (m) => idx < m.end && idx + h.text.length > m.start,
-      )
-      if (!overlaps) {
-        matches.push({
-          start: idx,
-          end: idx + h.text.length,
-          highlight: h,
-        })
-      }
-      from = idx + h.text.length
+      matches.push({
+        start: idx,
+        end: idx + h.text.length,
+        highlight: h,
+      })
+      from = idx + 1
     }
   }
 
   if (matches.length === 0) return [{ text }]
 
-  matches.sort((a, b) => a.start - b.start)
+  // Sort by start position, then longest first (so outer segments take priority)
+  matches.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start))
 
+  // Merge overlapping intervals: split into non-overlapping segments with all applicable highlights
   const segments: HighlightSegment[] = []
-  let cursor = 0
+  const points = new Set<number>()
+  points.add(0)
+  points.add(text.length)
   for (const m of matches) {
-    if (m.start > cursor) {
-      segments.push({ text: text.slice(cursor, m.start) })
+    points.add(m.start)
+    points.add(m.end)
+  }
+  const sortedPoints = [...points].sort((a, b) => a - b)
+
+  for (let i = 0; i < sortedPoints.length - 1; i++) {
+    const segStart = sortedPoints[i]
+    const segEnd = sortedPoints[i + 1]
+    if (segStart === segEnd) continue
+    const segText = text.slice(segStart, segEnd)
+    if (!segText) continue
+
+    // Find all highlights covering this segment (prefer first/longest for priority)
+    const covering = matches.filter(
+      (m) => m.start <= segStart && m.end >= segEnd,
+    )
+    if (covering.length > 0) {
+      segments.push({ text: segText, highlight: covering[0].highlight })
+    } else {
+      segments.push({ text: segText })
     }
-    segments.push({
-      text: text.slice(m.start, m.end),
-      highlight: m.highlight,
-    })
-    cursor = m.end
   }
-  if (cursor < text.length) {
-    segments.push({ text: text.slice(cursor) })
-  }
+
   return segments
 }
 

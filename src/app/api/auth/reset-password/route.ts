@@ -1,10 +1,20 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { hashPassword, createSession, getSessionCookieName, getSessionDuration, getClientIp, getUserAgent } from '@/lib/auth'
+import { applyRateLimit, cleanupRateLimits } from '@/lib/rate-limit'
 import { cookies } from 'next/headers'
 
 export async function POST(req: Request) {
   try {
+    const rateLimit = applyRateLimit(req, 'resetPassword')
+    if (!rateLimit.ok) {
+      return NextResponse.json(
+        { error: 'Слишком много попыток. Попробуйте позже.' },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } },
+      )
+    }
+    cleanupRateLimits()
+
     const body = await req.json()
     const { token, password } = body ?? {}
 

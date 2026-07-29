@@ -97,12 +97,11 @@ export function Library() {
   }, [refresh])
 
   // When user logs in, reassign anonymous books to their account (one-time)
+  const reassignedRef = useRef(false)
   useEffect(() => {
-    if (!user) return
-    let ran = false
+    if (!user || reassignedRef.current) return
+    reassignedRef.current = true
     ;(async () => {
-      if (ran) return
-      ran = true
       const count = await reassignBooksToUser(null, user.id)
       if (count > 0) {
         toast.success(`Привязано книг к аккаунту: ${count}`)
