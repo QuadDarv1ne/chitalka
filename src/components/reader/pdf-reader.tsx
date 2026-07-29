@@ -24,6 +24,17 @@ export function PdfReader({ book, onProgress }: Props) {
   const [pageLoading, setPageLoading] = useState(false)
   const [scale, setScale] = useState(1.2)
   const [pageInput, setPageInput] = useState(String(page))
+  const bookIdRef = useRef(book.id)
+
+  // Sync state when book changes
+  if (book.id !== bookIdRef.current) {
+    bookIdRef.current = book.id
+    setPage(book.pdfPage ?? 1)
+    setPageInput(String(book.pdfPage ?? 1))
+    setScale(1.2)
+    setTotalPages(0)
+    setLoading(true)
+  }
   const settings = useReaderStore((s) => s.settings)
 
   onProgressRef.current = onProgress

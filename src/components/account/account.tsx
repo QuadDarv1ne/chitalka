@@ -138,7 +138,9 @@ export function Account() {
       if (res.ok) {
         toast.success('Письмо отправлено')
         if (data._devVerifyLink) {
-          navigator.clipboard.writeText(data._devVerifyLink)
+          navigator.clipboard.writeText(data._devVerifyLink).catch(() => {
+            // Clipboard may be unavailable (insecure context, etc.)
+          })
           toast.info('Dev-ссылка скопирована в буфер обмена', {
             description: data._devVerifyLink,
           })

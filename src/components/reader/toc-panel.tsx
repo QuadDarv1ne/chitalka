@@ -209,23 +209,26 @@ export function TocPanel({ book, onNavigate }: Props) {
 }
 
 function TocRow({ item, onClick }: { item: TocItem; onClick: () => void }) {
+  const hasSubitems = item.subitems && item.subitems.length > 0
   return (
-    <>
-      <li>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2 h-auto py-2 text-left font-normal"
-          style={{ paddingLeft: `${item.level * 12 + 8}px` }}
-          onClick={onClick}
-        >
-          <FileText className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
-          <span className="truncate text-sm">{item.label}</span>
-        </Button>
-      </li>
-      {item.subitems?.map((sub) => (
-        <TocRow key={sub.id} item={sub} onClick={onClick} />
-      ))}
-    </>
+    <li>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="w-full justify-start gap-2 h-auto py-2 text-left font-normal"
+        style={{ paddingLeft: `${item.level * 12 + 8}px` }}
+        onClick={onClick}
+      >
+        <FileText className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
+        <span className="truncate text-sm">{item.label}</span>
+      </Button>
+      {hasSubitems && (
+        <ul className="space-y-0.5">
+          {item.subitems!.map((sub) => (
+            <TocRow key={sub.id} item={sub} onClick={onClick} />
+          ))}
+        </ul>
+      )}
+    </li>
   )
 }

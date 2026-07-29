@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef } from 'react'
 import { useReaderStore } from '@/store/reader-store'
 
 /**
@@ -12,7 +12,6 @@ export function useReadingTracker(bookId: string, pagesFlipped: number) {
   const startTimeRef = useRef<number>(Date.now())
   const pagesRef = useRef<number>(0)
   const lastFlushRef = useRef<number>(Date.now())
-  const [sessionMinutes, setSessionMinutes] = useState(0)
 
   // Track page flips
   useEffect(() => {
@@ -29,9 +28,7 @@ export function useReadingTracker(bookId: string, pagesFlipped: number) {
       if (elapsedMin >= 1) {
         logReading(bookId, elapsedMin, 0)
         lastFlushRef.current = now
-        setSessionMinutes((m) => m + elapsedMin)
       }
-      setSessionMinutes(Math.floor((now - startTimeRef.current) / 60000))
     }, 5000)
     return () => {
       clearInterval(interval)
@@ -48,5 +45,5 @@ export function useReadingTracker(bookId: string, pagesFlipped: number) {
     }
   }, [bookId, logReading])
 
-  return { sessionMinutes }
+  
 }

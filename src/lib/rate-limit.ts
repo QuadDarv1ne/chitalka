@@ -132,7 +132,19 @@ export function cleanupRateLimits(): void {
   }
 }
 
-// Auto-cleanup every 10 minutes
-if (typeof setInterval !== 'undefined') {
-  setInterval(cleanupRateLimits, 10 * 60 * 1000)
+// Auto-cleanup every 10 minutes (lazy — first call triggers setup)
+let cleanupTimer: ReturnType<typeof setInterval> | null = null
+export function startCleanupTimer(): void {
+  if (cleanupTimer) return
+  cleanupTimer = setInterval(cleanupRateLimits, 10 * 60 * 1000)
+}
+export function stopCleanupTimer(): void {
+  if (cleanupTimer) {
+    clearInterval(cleanupTimer)
+    cleanupTimer = null
+  }
+}
+// Bootstrap in long-running environments, but allow manual control
+if (typeof globalThis !== 'undefined' && typeof setInterval !== 'undefined' && typeof process !== 'undefined' && !process.env.NEXT_RUNTIME?.startsWith('edge')) {
+  startCleanupTimer()
 }

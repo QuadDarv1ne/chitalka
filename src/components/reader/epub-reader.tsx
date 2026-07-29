@@ -36,8 +36,19 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
   const updateNavButtons = useCallback(() => {
     const r = renditionRef.current
     if (!r) return
-    setHasPrev(true)
-    setHasNext(true)
+    try {
+      const loc = r.location
+      if (loc) {
+        setHasPrev(!loc.atStart)
+        setHasNext(!loc.atEnd)
+      } else {
+        setHasPrev(true)
+        setHasNext(true)
+      }
+    } catch {
+      setHasPrev(true)
+      setHasNext(true)
+    }
   }, [])
 
   // Initialize book

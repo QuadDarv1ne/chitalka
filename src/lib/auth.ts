@@ -3,11 +3,14 @@ import bcrypt from 'bcryptjs'
 import { SignJWT, jwtVerify } from 'jose'
 import { db } from '@/lib/db'
 
-if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
-  throw new Error('JWT_SECRET environment variable is required in production')
+if (!process.env.JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable is required in production')
+  }
+  console.warn('⚠️ JWT_SECRET not set — using a random dev-only secret. Set JWT_SECRET in .env for persistent sessions across restarts.')
 }
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'dev-secret-please-change-in-production-32chars-min',
+  process.env.JWT_SECRET || crypto.randomUUID(),
 )
 
 const SESSION_COOKIE = 'reader-session'

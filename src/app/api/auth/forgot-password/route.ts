@@ -39,6 +39,8 @@ export async function POST(req: Request) {
       where: { email: normalizedEmail },
     })
 
+    let resetLink: string | undefined
+
     if (user) {
       // Invalidate any previous tokens
       await db.passwordReset.deleteMany({
@@ -57,7 +59,7 @@ export async function POST(req: Request) {
 
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
         (req.headers.get('origin') ?? 'http://localhost:3000')
-      const resetLink = `${baseUrl}/?reset=${token}`
+      resetLink = `${baseUrl}/?reset=${token}`
 
       const html = `
         <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
@@ -110,8 +112,8 @@ ${resetLink}
       ok: true,
       message: 'Если аккаунт с таким email существует, письмо отправлено',
       // In dev mode, expose the reset link directly so user can see it
-      ...(process.env.NODE_ENV !== 'production' && user
-        ? { _devResetLink: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/?reset=${(await db.passwordReset.findFirst({ where: { userId: user.id, usedAt: null }, orderBy: { createdAt: 'desc' } }))?.token}` }
+      ...(process.env.NODE_ENV !== 'production' && resetLink
+        ? { _devResetLink: resetLink }
         : {}),
     })
   } catch (e) {

@@ -1,10 +1,14 @@
 import 'server-only'
+import os from 'os'
+import path from 'path'
+
+const LOG_PATH = path.join(os.tmpdir(), 'reader-emails.log')
 
 /**
  * Mock email service.
  *
  * ⚠️ In development mode, emails are logged to the server console and also
- * stored in /tmp/reader-emails.log so they can be inspected.
+ * stored in a temp file (see LOG_PATH) so they can be inspected.
  *
  * In production, replace this with a real SMTP/transactional email provider
  * (e.g. Resend, SendGrid, Postmark, AWS SES).
@@ -72,7 +76,7 @@ export async function sendEmail(
   try {
     const fs = await import('fs/promises')
     const logEntry = `[${sent.sentAt.toISOString()}] To: ${message.to} | Subject: ${message.subject} | ${sent.previewUrl || ''}\n`
-    await fs.appendFile('/tmp/reader-emails.log', logEntry)
+    await fs.appendFile(LOG_PATH, logEntry)
   } catch {}
 
   return sent

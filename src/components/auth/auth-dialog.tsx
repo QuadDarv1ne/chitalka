@@ -151,7 +151,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'login', onSucces
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    navigator.clipboard.writeText(registeredVerifyLink)
+                    navigator.clipboard.writeText(registeredVerifyLink).catch(() => {})
                     toast.success('Ссылка скопирована')
                   }}
                 >
@@ -216,7 +216,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'login', onSucces
                   variant="outline"
                   className="mt-2"
                   onClick={() => {
-                    navigator.clipboard.writeText(resetLink)
+                    navigator.clipboard.writeText(resetLink).catch(() => {})
                     toast.success('Ссылка скопирована')
                   }}
                 >
