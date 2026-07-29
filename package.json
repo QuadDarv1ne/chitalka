@@ -11,7 +11,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
-    "postinstall": "bunx prisma generate"
+    "postinstall": "bunx prisma generate && node -e \"try{const{cpSync,existsSync}=require('fs');if(existsSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs')){cpSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs','public/pdf.worker.min.mjs');console.log('PDF worker copied')}else{console.log('PDF worker not found')}}catch(e){console.error(e.message)}\""
   },
   "dependencies": {
     "@prisma/client": "^6.11.1",

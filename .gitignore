@@ -22,5 +22,8 @@ server.log
 # download folder
 download/
 
+# pdf.js worker (copied from node_modules during postinstall)
+/public/pdf.worker.min.mjs
+
 # prisma
 prisma/migrations/
