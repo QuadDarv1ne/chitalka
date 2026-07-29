@@ -62,7 +62,7 @@ export function PdfReader({ book, onProgress }: Props) {
       cancelled = true
       try {
         docRef.current?.cleanup()
-      } catch {}
+      } catch { console.warn('PDF cleanup failed') }
     }
   }, [book.id, book.blob])
 

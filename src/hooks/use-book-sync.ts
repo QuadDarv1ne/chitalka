@@ -53,6 +53,8 @@ export function useBookSync(books: BookRecord[]) {
       if (syncIntervalRef.current) {
         clearInterval(syncIntervalRef.current)
       }
+      // Final sync on unmount
+      sync()
     }
   }, [user, sync])
 }

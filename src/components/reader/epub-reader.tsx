@@ -145,7 +145,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       rendition.off('relocated', onLocated)
       try {
         rendition.destroy()
-      } catch {}
+      } catch { console.warn('Rendition destroy failed') }
       URL.revokeObjectURL(blobUrl)
       bookRef.current = null
       renditionRef.current = null
@@ -186,7 +186,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
     themes.select('custom')
     // Force re-render to apply
     ;(rendition.resize as any)?.()
-  }, [settings])
+  }, [settings.theme, settings.fontFamily, settings.fontSize, settings.lineHeight, settings.textAlign, settings.hyphens])
 
   return (
     <div

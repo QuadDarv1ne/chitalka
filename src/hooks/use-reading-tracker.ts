@@ -12,6 +12,8 @@ export function useReadingTracker(bookId: string, pagesFlipped: number) {
   const startTimeRef = useRef<number>(Date.now())
   const pagesRef = useRef<number>(0)
   const lastFlushRef = useRef<number>(Date.now())
+  const bookIdRef = useRef(bookId)
+  bookIdRef.current = bookId
 
   // Track page flips
   useEffect(() => {
@@ -22,28 +24,26 @@ export function useReadingTracker(bookId: string, pagesFlipped: number) {
   useEffect(() => {
     startTimeRef.current = Date.now()
     lastFlushRef.current = Date.now()
+    const id = bookIdRef.current
     const interval = setInterval(() => {
       const now = Date.now()
       const elapsedMin = Math.floor((now - lastFlushRef.current) / 60000)
       if (elapsedMin >= 1) {
-        logReading(bookId, elapsedMin, 0)
+        logReading(id, elapsedMin, 0)
         lastFlushRef.current = now
       }
     }, 5000)
     return () => {
       clearInterval(interval)
-      // Final flush
       const now = Date.now()
       const elapsedMin = Math.floor((now - lastFlushRef.current) / 60000)
       if (elapsedMin > 0) {
-        logReading(bookId, elapsedMin, 0)
+        logReading(bookIdRef.current, elapsedMin, 0)
       }
       const totalMin = Math.floor((now - startTimeRef.current) / 60000)
       if (totalMin > 0) {
-        logReading(bookId, 0, pagesRef.current)
+        logReading(bookIdRef.current, 0, pagesRef.current)
       }
     }
-  }, [bookId, logReading])
-
-  
+  }, [logReading])
 }

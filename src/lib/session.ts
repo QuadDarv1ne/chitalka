@@ -31,12 +31,8 @@ export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
   return user
 }
 
-export async function requireUser(): Promise<AuthenticatedUser> {
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error('Unauthorized')
-  }
-  return user
+export async function requireUser(): Promise<AuthenticatedUser | null> {
+  return getCurrentUser()
 }
 
 export async function getSessionPayload(): Promise<SessionPayload | null> {

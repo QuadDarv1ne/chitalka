@@ -77,7 +77,7 @@ export async function sendEmail(
     const fs = await import('fs/promises')
     const logEntry = `[${sent.sentAt.toISOString()}] To: ${message.to} | Subject: ${message.subject} | ${sent.previewUrl || ''}\n`
     await fs.appendFile(LOG_PATH, logEntry)
-  } catch {}
+  } catch { console.warn('Failed to write email log') }
 
   return sent
 }

@@ -85,7 +85,8 @@ export async function verifySession(
     }
 
     return sessionPayload
-  } catch {
+  } catch (e) {
+    console.warn('Session verification failed', e)
     return null
   }
 }

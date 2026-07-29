@@ -43,9 +43,13 @@ export function SearchDialog({ book }: Props) {
   // Load text content (for TXT/MD/FB2)
   useEffect(() => {
     if (!open) return
+    let cancelled = false
     if (book.format === 'txt' || book.format === 'md' || book.format === 'fb2') {
-      book.blob.text().then(setTextContent)
+      book.blob.text().then((text) => {
+        if (!cancelled) setTextContent(text)
+      })
     }
+    return () => { cancelled = true }
   }, [open, book])
 
   const search = useCallback(async () => {
@@ -132,7 +136,7 @@ export function SearchDialog({ book }: Props) {
               })
               idx = lower.indexOf(q, idx + 1)
             }
-          } catch {}
+          } catch { console.warn('EPUB spine item load failed') }
         }
         URL.revokeObjectURL(blobUrl)
         setResults(found)

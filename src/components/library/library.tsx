@@ -178,7 +178,7 @@ export function Library() {
     [refresh],
   )
 
-  const filtered = books
+  const filtered = useMemo(() => books
     .filter((b) => formatFilter === 'all' || b.format === formatFilter)
     .filter(
       (b) =>
@@ -189,7 +189,7 @@ export function Library() {
       if (sort === 'title') return a.title.localeCompare(b.title, 'ru')
       if (sort === 'added') return b.addedAt - a.addedAt
       return (b.lastOpenedAt ?? 0) - (a.lastOpenedAt ?? 0)
-    })
+    }), [books, formatFilter, search, sort])
 
   const stats = {
     total: books.length,

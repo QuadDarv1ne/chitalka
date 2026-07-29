@@ -20,11 +20,19 @@ interface Props {
   onNavigate: () => void
 }
 
+const tocCache = new Map<string, TocItem[]>()
+
 export function TocPanel({ book, onNavigate }: Props) {
-  const [toc, setToc] = useState<TocItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [toc, setToc] = useState<TocItem[]>(() => tocCache.get(book.id) ?? [])
+  const [loading, setLoading] = useState(() => !tocCache.has(book.id))
 
   useEffect(() => {
+    const cached = tocCache.get(book.id)
+    if (cached) {
+      setToc(cached)
+      setLoading(false)
+      return
+    }
     let cancelled = false
     setLoading(true)
     ;(async () => {
@@ -47,7 +55,9 @@ export function TocPanel({ book, onNavigate }: Props) {
                 : undefined,
             }))
           }
-          setToc(flatten(navigation.toc || []))
+          const flattened = flatten(navigation.toc || [])
+          tocCache.set(book.id, flattened)
+          setToc(flattened)
           URL.revokeObjectURL(blobUrl)
         } catch (e) {
           console.error(e)
@@ -71,7 +81,7 @@ export function TocPanel({ book, onNavigate }: Props) {
                     const idx = await doc.getPageIndex(dest[0])
                     pageNum = idx + 1
                   }
-                } catch {}
+                } catch { console.warn('PDF destination lookup failed') }
               }
               items.push({
                 id: crypto.randomUUID(),
@@ -94,7 +104,10 @@ export function TocPanel({ book, onNavigate }: Props) {
               })
             }
           }
-          if (!cancelled) setToc(items)
+          if (!cancelled) {
+            tocCache.set(book.id, items)
+            setToc(items)
+          }
         } catch (e) {
           console.error(e)
         }
@@ -144,7 +157,10 @@ export function TocPanel({ book, onNavigate }: Props) {
               })
             }
           }
-          if (!cancelled) setToc(items)
+          if (!cancelled) {
+            tocCache.set(book.id, items)
+            setToc(items)
+          }
         } catch (e) {
           console.error(e)
         }
