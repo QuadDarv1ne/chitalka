@@ -35,15 +35,11 @@ export async function POST(req: Request) {
       where: { email: normalizedEmail },
     })
 
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Неверный email или пароль' },
-        { status: 401 },
-      )
-    }
-
-    const ok = await verifyPassword(password, user.passwordHash)
-    if (!ok) {
+    // Constant-time comparison: always verify password, even if user not found,
+    // to prevent timing-based email enumeration.
+    const passwordHash = user?.passwordHash ?? '$2a$12$0000000000000000000000000000000000000000000000'
+    const ok = await verifyPassword(password, passwordHash)
+    if (!user || !ok) {
       return NextResponse.json(
         { error: 'Неверный email или пароль' },
         { status: 401 },

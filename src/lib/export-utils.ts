@@ -47,7 +47,7 @@ export function exportHighlightsToMarkdown(
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${book.title.replace(/[^\wа-яА-ЯёЁ\s-]/g, '')} — выделения.md`
+  a.download = `${book.title.replace(/[^\wа-яА-ЯёЁ\s-]/g, '').trim().replace(/\s+/g, '_')} — выделения.md`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

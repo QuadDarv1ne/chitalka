@@ -11,11 +11,9 @@ import {
   Mail,
   ShieldCheck,
   ShieldAlert,
-  Lock,
   Trash2,
   Monitor,
   Smartphone,
-  Globe,
   LogOut,
   Loader2,
   RefreshCw,
@@ -46,7 +44,7 @@ interface SessionInfo {
 
 export function Account() {
   const setView = useReaderStore((s) => s.setView)
-  const { user, logout, updateProfile, changePassword, deleteAccount, refresh } = useAuth()
+  const { user, logout, updateProfile, changePassword, deleteAccount } = useAuth()
 
   const [name, setName] = useState(user?.name ?? '')
   const [savingProfile, setSavingProfile] = useState(false)

@@ -3,6 +3,18 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes)
+    .map((b, i) => (i === 6 ? (b & 0x0f) | 0x40 : i === 8 ? (b & 0x3f) | 0x80 : b).toString(16).padStart(2, '0'))
+    .join('')
+    .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5')
+}
+
 export type Theme = 'light' | 'dark' | 'sepia' | 'contrast'
 export type FontFamily = 'serif' | 'sans' | 'mono'
 export type View = 'library' | 'reader' | 'stats' | 'account'
@@ -99,7 +111,7 @@ const defaultSettings: ReaderSettings = {
 
 export const useReaderStore = create<ReaderState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       view: 'library',
       currentBookId: null,
       settings: defaultSettings,
@@ -129,14 +141,14 @@ export const useReaderStore = create<ReaderState>()(
         set((s) => ({
           bookmarks: [
             ...s.bookmarks,
-            { ...b, id: crypto.randomUUID(), createdAt: Date.now() },
+            { ...b, id: generateId(), createdAt: Date.now() },
           ],
         })),
       removeBookmark: (id) =>
         set((s) => ({ bookmarks: s.bookmarks.filter((b) => b.id !== id) })),
 
       addHighlight: (h) => {
-        const id = crypto.randomUUID()
+        const id = generateId()
         set((s) => ({
           highlights: [
             ...s.highlights,
@@ -158,6 +170,8 @@ export const useReaderStore = create<ReaderState>()(
 
       logReading: (bookId, minutes, pages) =>
         set((s) => {
+          const safeMinutes = Math.max(0, Math.min(minutes, 1440))
+          const safePages = Math.max(0, Math.min(pages, 10000))
           const date = new Date().toISOString().slice(0, 10)
           const existing = s.sessions.find(
             (sess) => sess.bookId === bookId && sess.date === date,
@@ -168,15 +182,15 @@ export const useReaderStore = create<ReaderState>()(
                 sess === existing
                   ? {
                       ...sess,
-                      minutes: sess.minutes + minutes,
-                      pages: sess.pages + pages,
+                      minutes: sess.minutes + safeMinutes,
+                      pages: sess.pages + safePages,
                     }
                   : sess,
               ),
             }
           }
           return {
-            sessions: [...s.sessions, { bookId, date, minutes, pages }],
+            sessions: [...s.sessions, { bookId, date, minutes: safeMinutes, pages: safePages }],
           }
         }),
 
@@ -187,12 +201,19 @@ export const useReaderStore = create<ReaderState>()(
     }),
     {
       name: 'reader-store',
+      version: 1,
       partialize: (s) => ({
         settings: s.settings,
         bookmarks: s.bookmarks,
         highlights: s.highlights,
         sessions: s.sessions,
       }),
+      migrate: (state: any, version: number) => {
+        if (version === 0) {
+          return { ...state, sessions: state.sessions ?? [] }
+        }
+        return state as ReaderState
+      },
     },
   ),
 )

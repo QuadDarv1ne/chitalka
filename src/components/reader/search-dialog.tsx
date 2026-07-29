@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Search, ChevronUp, ChevronDown, X } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { useReaderStore } from '@/store/reader-store'
 import type { BookRecord } from '@/lib/library'
 import { PAGE_WORDS } from '@/lib/constants'
@@ -36,7 +36,6 @@ export function SearchDialog({ book }: Props) {
   const setOpen = useReaderStore((s) => s.setSearchOpen)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
-  const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(false)
   const [textContent, setTextContent] = useState<string>('')
 
@@ -58,7 +57,6 @@ export function SearchDialog({ book }: Props) {
       return
     }
     setLoading(true)
-    setCurrentIndex(0)
     try {
       if (book.format === 'txt' || book.format === 'md' || book.format === 'fb2') {
         const lower = textContent.toLowerCase()
@@ -173,7 +171,6 @@ export function SearchDialog({ book }: Props) {
     if (!open) {
       setQuery('')
       setResults([])
-      setCurrentIndex(0)
     }
   }, [open])
 
@@ -227,10 +224,7 @@ export function SearchDialog({ book }: Props) {
             {results.map((r, i) => (
               <li key={i}>
                 <button
-                  onClick={() => {
-                    setCurrentIndex(i)
-                    goTo(r)
-                  }}
+                  onClick={() => goTo(r)}
                   className="w-full text-left rounded-md p-2 hover:bg-accent transition-colors"
                 >
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">

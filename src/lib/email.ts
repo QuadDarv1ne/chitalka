@@ -53,7 +53,7 @@ export async function sendEmail(
     id,
     sentAt: new Date(),
     // In dev mode: extract reset link for display
-    previewUrl: message.html.match(/href="([^"]*reset[^"]*)"/)?.[1],
+    previewUrl: message.html.match(/href="([^"]+)"/)?.[1],
   }
   sentEmails.push(sent)
   // Keep memory bounded

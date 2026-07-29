@@ -2,15 +2,6 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/session'
 
-interface SyncBook {
-  bookId: string
-  title: string
-  author: string
-  format: string
-  progress: number
-  lastOpenedAt?: string | null
-}
-
 /**
  * POST /api/books/sync — sync local book metadata to server
  * Body: { books: SyncBook[] } — массив метаданных книг

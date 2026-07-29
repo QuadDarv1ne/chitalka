@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { BookOpen, ChevronRight, FileText } from 'lucide-react'
+import { BookOpen, FileText } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
 import { Button } from '@/components/ui/button'
 import { initPdfWorker } from '@/lib/pdf-worker'

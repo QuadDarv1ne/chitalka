@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getCurrentUser, getSessionPayload } from '@/lib/session'
+import { getCurrentUser } from '@/lib/session'
 import { verifyPassword } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import { getSessionCookieName } from '@/lib/auth'

@@ -19,11 +19,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
   title: "Читалка — удобная читалка книг",
   description: "Удобная и функциональная читалка для EPUB, FB2, PDF, TXT, Markdown. Локальное хранение, темы оформления, закладки.",
   keywords: ["читалка", "epub", "fb2", "pdf", "txt", "книги", "reader"],
   icons: {
     icon: "/logo.svg",
+  },
+  openGraph: {
+    title: "Читалка — удобная читалка книг",
+    description: "Удобная читалка для EPUB, FB2, PDF, TXT, Markdown с локальным хранением.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Читалка — удобная читалка книг",
+    description: "Удобная читалка для EPUB, FB2, PDF, TXT, Markdown с локальным хранением.",
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 

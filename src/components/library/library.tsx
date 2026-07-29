@@ -50,10 +50,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from '@/components/ui/toggle-group'
 import { motion, AnimatePresence } from 'framer-motion'
 import { exportLibraryBackup } from '@/lib/export-utils'
 import { UserMenu } from '@/components/auth/user-menu'
