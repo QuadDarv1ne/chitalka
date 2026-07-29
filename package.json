@@ -4,13 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
-    "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
+    "build": "next build && node -e \"const{cpSync}=require('fs');try{cpSync('.next/static','.next/standalone/.next/static',{recursive:true,force:true})}catch(e){process.stderr.write(e.message+'\\n')}try{cpSync('public','.next/standalone/public',{recursive:true,force:true})}catch(e){process.stderr.write(e.message+'\\n')}\"",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "postinstall": "bunx prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^6.11.1",

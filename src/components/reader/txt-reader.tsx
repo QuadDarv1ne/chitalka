@@ -378,7 +378,7 @@ export function TxtReader({ book, onProgress }: Props) {
             size="icon"
             onClick={handleTTS}
             className="rounded-full shadow-md h-11 w-11"
-            aria-label="Читать вслух"
+            aria-label={tts.speaking ? 'Остановить' : 'Читать вслух'}
           >
             {tts.speaking ? <Square className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
           </Button>

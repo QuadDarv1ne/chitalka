@@ -8,10 +8,13 @@ import { Bookmark, BookmarkX, Plus } from 'lucide-react'
 
 interface Props {
   book: BookRecord
+  currentCfi?: string
+  currentTextPosition?: number
+  currentPdfPage?: number
   onNavigate: () => void
 }
 
-export function BookmarksPanel({ book, onNavigate }: Props) {
+export function BookmarksPanel({ book, currentCfi, currentTextPosition, currentPdfPage, onNavigate }: Props) {
   const bookmarks = useReaderStore((s) => s.bookmarks)
   const addBookmark = useReaderStore((s) => s.addBookmark)
   const removeBookmark = useReaderStore((s) => s.removeBookmark)
@@ -21,9 +24,9 @@ export function BookmarksPanel({ book, onNavigate }: Props) {
   const handleAdd = () => {
     addBookmark({
       bookId: book.id,
-      cfi: book.cfi,
-      textPosition: book.textPosition,
-      pdfPage: book.pdfPage,
+      cfi: currentCfi ?? book.cfi,
+      textPosition: currentTextPosition ?? book.textPosition,
+      pdfPage: currentPdfPage ?? book.pdfPage,
       label: `Закладка ${bookMarks.length + 1} · ${new Date().toLocaleString('ru-RU', {
         day: 'numeric',
         month: 'short',

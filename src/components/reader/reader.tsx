@@ -49,6 +49,9 @@ export function Reader() {
   const [progress, setProgress] = useState(0)
   const [activeTab, setActiveTab] = useState<SidebarTab>('toc')
   const [helpOpen, setHelpOpen] = useState(false)
+  const [currentCfi, setCurrentCfi] = useState<string | undefined>(book?.cfi)
+  const [currentTextPosition, setCurrentTextPosition] = useState<number | undefined>(book?.textPosition)
+  const [currentPdfPage, setCurrentPdfPage] = useState<number | undefined>(book?.pdfPage)
 
   useEffect(() => {
     if (!currentBookId) return
@@ -73,6 +76,9 @@ export function Reader() {
   const handleProgressChange = useCallback(
     async (p: number, extra?: { cfi?: string; textPosition?: number; pdfPage?: number }) => {
       setProgress(p)
+      if (extra?.cfi !== undefined) setCurrentCfi(extra.cfi)
+      if (extra?.textPosition !== undefined) setCurrentTextPosition(extra.textPosition)
+      if (extra?.pdfPage !== undefined) setCurrentPdfPage(extra.pdfPage)
       if (!book) return
       await updateBook(book.id, {
         progress: p,
@@ -292,7 +298,13 @@ export function Reader() {
           <SheetHeader>
             <SheetTitle>Закладки</SheetTitle>
           </SheetHeader>
-          <BookmarksPanel book={book} onNavigate={() => setBookmarksOpen(false)} />
+          <BookmarksPanel
+            book={book}
+            currentCfi={currentCfi}
+            currentTextPosition={currentTextPosition}
+            currentPdfPage={currentPdfPage}
+            onNavigate={() => setBookmarksOpen(false)}
+          />
         </SheetContent>
       </Sheet>
 
