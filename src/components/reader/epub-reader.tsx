@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import ePub, { type Book, type Rendition } from 'epubjs'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -12,7 +12,7 @@ interface Props {
   onProgress: (p: number, extra?: { cfi?: string; textPosition?: number }) => void
 }
 
-export function EpubReader({ book, onProgress }: Props) {
+export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) {
   const viewerRef = useRef<HTMLDivElement>(null)
   const bookRef = useRef<Book | null>(null)
   const renditionRef = useRef<Rendition | null>(null)
@@ -22,7 +22,9 @@ export function EpubReader({ book, onProgress }: Props) {
   const [hasNext, setHasNext] = useState(false)
   const settings = useReaderStore((s) => s.settings)
 
-  onProgressRef.current = onProgress
+  useEffect(() => {
+    onProgressRef.current = onProgress
+  }, [onProgress])
 
   // Navigation helpers (declared before effects that use them)
   const prev = useCallback(() => {
@@ -212,4 +214,4 @@ export function EpubReader({ book, onProgress }: Props) {
       </Button>
     </div>
   )
-}
+})

@@ -53,8 +53,6 @@ export function Reader() {
   useEffect(() => {
     if (!currentBookId) return
     let cancelled = false
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true)
     getBook(currentBookId)
       .then((b) => {
         if (cancelled) return

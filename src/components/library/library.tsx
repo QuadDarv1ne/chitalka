@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { memo, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
@@ -450,7 +450,7 @@ export function Library() {
   )
 }
 
-function ContinueReadingCard({
+const ContinueReadingCard = memo(function ContinueReadingCard({
   book,
   onClick,
 }: {
@@ -493,9 +493,9 @@ function ContinueReadingCard({
       </div>
     </button>
   )
-}
+})
 
-function BookCard({
+const BookCard = memo(function BookCard({
   book,
   onOpen,
   onDelete,
@@ -568,9 +568,9 @@ function BookCard({
       </div>
     </Card>
   )
-}
+})
 
-function EmptyState({ hasBooks, onImport }: { hasBooks: boolean; onImport: () => void }) {
+const EmptyState = memo(function EmptyState({ hasBooks, onImport }: { hasBooks: boolean; onImport: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted mb-6">
@@ -591,9 +591,9 @@ function EmptyState({ hasBooks, onImport }: { hasBooks: boolean; onImport: () =>
       )}
     </div>
   )
-}
+})
 
-function ThemeSwitcher({ value, onChange }: { value: Theme; onChange: (t: Theme) => void }) {
+const ThemeSwitcher = memo(function ThemeSwitcher({ value, onChange }: { value: Theme; onChange: (t: Theme) => void }) {
   const themes: { key: Theme; label: string; icon: React.ReactNode }[] = [
     { key: 'light', label: 'Светлая', icon: <Sun className="h-4 w-4" /> },
     { key: 'sepia', label: 'Сепия', icon: <Coffee className="h-4 w-4" /> },
@@ -618,4 +618,4 @@ function ThemeSwitcher({ value, onChange }: { value: Theme; onChange: (t: Theme)
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
+})
