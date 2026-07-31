@@ -52,7 +52,8 @@ export async function parseEpubMeta(
       const coverPath = resolvePath(opfPath, meta.manifest[coverId])
       const coverEntry = entries[coverPath]
       if (coverEntry) {
-        const blob = new Blob([coverEntry.buffer as ArrayBuffer])
+        // Blob uses only the view's bytes (not the whole ZIP buffer)
+        const blob = new Blob([coverEntry.slice()])
         cover = await blobToDataURL(blob)
       }
     }
@@ -73,37 +74,63 @@ interface ZipEntry {
 }
 
 async function unzip(buffer: ArrayBuffer): Promise<ZipEntry> {
-  // Minimal unzip — only stored (0) and deflated (8)
+  // Minimal unzip — only stored (0) and deflated (8), with safety caps
   const view = new DataView(buffer)
   const entries: ZipEntry = {}
   let offset = 0
-  // Need inflate for deflated data — use browser DecompressionStream
-  while (offset < buffer.byteLength - 4) {
+  const MAX_ENTRIES = 10000
+  const MAX_ENTRY_SIZE = 64 * 1024 * 1024 // 64 MB per entry
+  while (offset < buffer.byteLength - 4 && Object.keys(entries).length < MAX_ENTRIES) {
     const sig = view.getUint32(offset, true)
     if (sig !== 0x04034b50) break
+    const flags = view.getUint16(offset + 6, true)
     const compressionMethod = view.getUint16(offset + 8, true)
-    const compressedSize = view.getUint32(offset + 18, true)
-    const uncompressedSize = view.getUint32(offset + 22, true)
+    let compressedSize = view.getUint32(offset + 18, true)
+    let uncompressedSize = view.getUint32(offset + 22, true)
     const filenameLen = view.getUint16(offset + 26, true)
     const extraLen = view.getUint16(offset + 28, true)
     const filename = new TextDecoder().decode(
       new Uint8Array(buffer, offset + 30, filenameLen),
     )
     const dataStart = offset + 30 + filenameLen + extraLen
-    const compressedData = new Uint8Array(buffer, dataStart, compressedSize)
-    if (compressionMethod === 0) {
-      entries[filename] = compressedData
-    } else if (compressionMethod === 8) {
-      // Use DecompressionStream (deflate-raw)
-      const blob = new Blob([compressedData])
-      const ds = new DecompressionStream('deflate-raw')
-      const stream = blob.stream().pipeThrough(ds)
-      const decompressed = await new Response(stream).arrayBuffer()
-      entries[filename] = new Uint8Array(decompressed)
+    const usesDataDescriptor = (flags & 0x8) !== 0
+
+    if (usesDataDescriptor && compressedSize === 0 && uncompressedSize === 0) {
+      // Bit 3: sizes live in the data descriptor after the data — scan for it
+      const scanEnd = Math.min(buffer.byteLength, dataStart + MAX_ENTRY_SIZE)
+      let descPos = -1
+      for (let i = dataStart; i < scanEnd - 4; i++) {
+        if (view.getUint32(i, true) === 0x08074b50) {
+          descPos = i
+          break
+        }
+      }
+      if (descPos === -1) break
+      compressedSize = view.getUint32(descPos + 4, true)
+      uncompressedSize = view.getUint32(descPos + 8, true)
+      offset = descPos + 12
+    } else {
+      offset = dataStart + compressedSize
     }
-    offset = dataStart + compressedSize
-    if (compressedSize === 0 && uncompressedSize === 0) {
-      // sometimes a directory entry — just continue
+
+    // Safety caps (zip-bomb protection)
+    if (compressedSize > MAX_ENTRY_SIZE || uncompressedSize > MAX_ENTRY_SIZE) continue
+
+    try {
+      if (compressionMethod === 0) {
+        entries[filename] = new Uint8Array(buffer, dataStart, compressedSize)
+      } else if (compressionMethod === 8) {
+        // Use DecompressionStream (deflate-raw)
+        const compressedData = new Uint8Array(buffer, dataStart, compressedSize)
+        const blob = new Blob([compressedData])
+        const ds = new DecompressionStream('deflate-raw')
+        const stream = blob.stream().pipeThrough(ds)
+        const decompressed = await new Response(stream).arrayBuffer()
+        entries[filename] = new Uint8Array(decompressed)
+      }
+    } catch (e) {
+      // A corrupt entry must not abort the whole archive
+      console.warn('EPUB: failed to read entry', filename, e)
     }
   }
   return entries
@@ -135,22 +162,44 @@ function parseOpf(opfText: string): OpfMeta {
     const item = m[0]
     const id = item.match(/id="([^"]+)"/)?.[1]
     const href = item.match(/href="([^"]+)"/)?.[1]
-    if (id && href) manifest[id] = decodeURIComponent(href)
+    if (!id || !href) continue
+    try {
+      manifest[id] = decodeURIComponent(href)
+    } catch {
+      // Malformed percent-encoding in href — skip this item, keep parsing
+      continue
+    }
   }
   return { title, author, manifest }
 }
 
 function findCoverId(opfText: string): string | null {
-  const m1 = opfText.match(/<meta[^>]*name="cover"[^>]*content="([^"]+)"/i)
+  // 1) explicit <meta name="cover" content="id"/>
+  const m1 = opfText.match(/<meta[^>]*name=["']cover["'][^>]*content=["']([^"']+)["']/i)
   if (m1) return m1[1]
-  const m2 = opfText.match(/<item[^>]*id="(cover[^"]*)"[^>]*href="([^"]+)"[^>]*media-type="image\/[^"]+"/i)
-  if (m2) return m2[1]
+  // 2) image item whose id or href mentions "cover" (attribute order independent)
+  const itemRegex = /<item\b[^>]*>/gi
+  let m: RegExpExecArray | null
+  while ((m = itemRegex.exec(opfText)) !== null) {
+    const item = m[0]
+    if (!/media-type=["']image\//i.test(item)) continue
+    const id = item.match(/id=["']([^"']+)["']/i)?.[1]
+    const href = item.match(/href=["']([^"']+)["']/i)?.[1]
+    if (!id || !href) continue
+    if (/cover/i.test(id) || /cover/i.test(href)) return id
+  }
   return null
 }
 
 function resolvePath(opfPath: string, href: string): string {
-  const dir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : ''
-  return (dir + href).replace(/^\.\//, '')
+  const base = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : ''
+  const stack: string[] = []
+  for (const part of (base + href).split('/')) {
+    if (part === '' || part === '.') continue
+    if (part === '..') stack.pop()
+    else stack.push(part)
+  }
+  return stack.join('/')
 }
 
 function blobToDataURL(blob: Blob): Promise<string> {
@@ -203,8 +252,12 @@ export async function parseFb2Meta(file: File): Promise<ParsedBook> {
     const getCover = async (): Promise<string | undefined> => {
       try {
         // Find cover image reference
-        const coverEl = doc.querySelector('coverpage > image') || doc.querySelector('image[l\\:href]')
-        const href = coverEl?.getAttribute('l:href') || coverEl?.getAttribute('xlink:href') || coverEl?.getAttribute('href')
+        const coverEl = doc.querySelector('coverpage > image')
+        if (!coverEl) return undefined
+        const href =
+          coverEl.getAttributeNS('http://www.w3.org/1999/xlink', 'href') ||
+          coverEl.getAttribute('href') ||
+          coverEl.getAttribute('l:href')
         if (!href) return undefined
         const id = href.replace(/^#/, '')
         // Find binary with matching id
@@ -246,9 +299,11 @@ export async function parseFb2Content(file: File): Promise<string> {
 
     const result: string[] = []
 
+    const isLocal = (el: Element, name: string) => el.localName === name
+
     const processSection = (section: Element, level: number) => {
       // Section title
-      const title = section.querySelector(':scope > title')
+      const title = Array.from(section.children).find((c) => isLocal(c, 'title'))
       if (title) {
         const titleText = Array.from(title.querySelectorAll('p'))
           .map((p) => p.textContent?.trim())
@@ -261,18 +316,14 @@ export async function parseFb2Content(file: File): Promise<string> {
       }
 
       // Paragraphs (direct children only)
-      const paragraphs = Array.from(section.children).filter(
-        (c) => c.tagName.toLowerCase() === 'p',
-      )
+      const paragraphs = Array.from(section.children).filter((c) => isLocal(c, 'p'))
       for (const p of paragraphs) {
         const pText = p.textContent?.trim().replace(/\s+/g, ' ')
         if (pText) result.push(pText)
       }
 
       // Sub-sections
-      const subsections = Array.from(section.children).filter(
-        (c) => c.tagName.toLowerCase() === 'section',
-      )
+      const subsections = Array.from(section.children).filter((c) => isLocal(c, 'section'))
       for (const sub of subsections) {
         result.push('')
         processSection(sub, level + 1)
@@ -280,14 +331,10 @@ export async function parseFb2Content(file: File): Promise<string> {
     }
 
     // Get top-level sections
-    const topSections = Array.from(body.children).filter(
-      (c) => c.tagName.toLowerCase() === 'section',
-    )
+    const topSections = Array.from(body.children).filter((c) => isLocal(c, 'section'))
     if (topSections.length === 0) {
       // No sections — just paragraphs in body
-      const paragraphs = Array.from(body.children).filter(
-        (c) => c.tagName.toLowerCase() === 'p',
-      )
+      const paragraphs = Array.from(body.children).filter((c) => isLocal(c, 'p'))
       for (const p of paragraphs) {
         const pText = p.textContent?.trim().replace(/\s+/g, ' ')
         if (pText) result.push(pText)
@@ -332,30 +379,35 @@ export async function parsePdfMeta(file: File): Promise<ParsedBook> {
     const pdfjs = await import('pdfjs-dist')
     await initPdfWorker()
     const data = await file.arrayBuffer()
-    const doc = await pdfjs.getDocument({ data }).promise
-    const meta = await doc.getMetadata().catch(() => null)
+    const loadingTask = pdfjs.getDocument({ data })
+    const doc = await loadingTask.promise
     let title = defaultResult.title
     let author = defaultResult.author
-    if (meta?.info) {
-      const info = meta.info as any
-      if (info.Title) title = String(info.Title)
-      if (info.Author) author = String(info.Author)
-    }
-    // Render first page as cover
-    let cover: string | undefined
     try {
-      const page = await doc.getPage(1)
-      const viewport = page.getViewport({ scale: 0.5 })
-      const canvas = document.createElement('canvas')
-      canvas.width = viewport.width
-      canvas.height = viewport.height
-      const ctx = canvas.getContext('2d')!
-      await page.render({ canvasContext: ctx, viewport, canvas } as any).promise
-      cover = canvas.toDataURL('image/jpeg', 0.7)
-    } catch (e) {
-      console.warn('PDF cover render failed', e)
+      const meta = await doc.getMetadata().catch(() => null)
+      if (meta?.info) {
+        const info = meta.info as any
+        if (info.Title) title = String(info.Title)
+        if (info.Author) author = String(info.Author)
+      }
+      // Render first page as cover
+      let cover: string | undefined
+      try {
+        const page = await doc.getPage(1)
+        const viewport = page.getViewport({ scale: 0.5 })
+        const canvas = document.createElement('canvas')
+        canvas.width = viewport.width
+        canvas.height = viewport.height
+        const ctx = canvas.getContext('2d')!
+        await page.render({ canvasContext: ctx, viewport, canvas } as any).promise
+        cover = canvas.toDataURL('image/jpeg', 0.7)
+      } catch (e) {
+        console.warn('PDF cover render failed', e)
+      }
+      return { title, author, cover, format: 'pdf' }
+    } finally {
+      await loadingTask.destroy().catch(() => {})
     }
-    return { title, author, cover, format: 'pdf' }
   } catch (e) {
     console.warn('PDF parse failed', e)
     return defaultResult

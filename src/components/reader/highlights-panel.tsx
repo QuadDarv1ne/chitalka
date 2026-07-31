@@ -99,7 +99,7 @@ export function HighlightsPanel({ book, onNavigate }: Props) {
               .slice()
               .sort((a, b) => b.createdAt - a.createdAt)
               .map((h) => {
-                const color = highlightColors[h.color]
+                const color = highlightColors[h.color] ?? highlightColors.yellow
                 return (
                   <li
                     key={h.id}

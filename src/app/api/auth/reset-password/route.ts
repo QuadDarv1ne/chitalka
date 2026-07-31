@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { hashPassword, createSession, getSessionCookieName, getSessionDuration, getClientIp, getUserAgent } from '@/lib/auth'
+import { hashPassword, createSession, getSessionCookieName, getSessionDuration, getClientIp, getUserAgent, isCookieSecure } from '@/lib/auth'
 import { applyRateLimit, cleanupRateLimits } from '@/lib/rate-limit'
 import { cookies } from 'next/headers'
 
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
     const cookieStore = await cookies()
     cookieStore.set(getSessionCookieName(), sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isCookieSecure(),
       sameSite: 'lax',
       path: '/',
       maxAge: getSessionDuration(),

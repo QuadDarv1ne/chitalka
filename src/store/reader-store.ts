@@ -90,6 +90,12 @@ interface ReaderState {
 
   logReading: (bookId: string, minutes: number, pages: number) => void
   removeBookData: (bookId: string) => void
+  restoreData: (data: {
+    settings: Partial<ReaderSettings>
+    bookmarks: Bookmark[]
+    highlights: Highlight[]
+    sessions: ReadingSession[]
+  }) => void
 
   setSearchOpen: (open: boolean) => void
   setSidebarOpen: (open: boolean) => void
@@ -201,6 +207,28 @@ export const useReaderStore = create<ReaderState>()(
           highlights: s.highlights.filter((h) => h.bookId !== bookId),
           sessions: s.sessions.filter((sess) => sess.bookId !== bookId),
         })),
+
+      restoreData: ({ settings, bookmarks, highlights, sessions }) =>
+        set((s) => {
+          const validColor = (c: unknown): c is HighlightColor =>
+            c === 'yellow' || c === 'green' || c === 'blue' || c === 'pink' || c === 'purple'
+          const existingBookmarkIds = new Set(s.bookmarks.map((b) => b.id))
+          const existingHighlightIds = new Set(s.highlights.map((h) => h.id))
+          const restoredBookmarks = bookmarks
+            .filter((b) => !existingBookmarkIds.has(b.id))
+            .slice(0, 2000)
+          const restoredHighlights = highlights
+            .filter((h) => !existingHighlightIds.has(h.id) && validColor(h.color))
+            .slice(0, 10000)
+          return {
+            settings: { ...s.settings, ...settings },
+            bookmarks: [...s.bookmarks, ...restoredBookmarks],
+            highlights: [...s.highlights, ...restoredHighlights],
+            sessions: s.sessions.length >= 100000
+              ? s.sessions
+              : [...s.sessions, ...sessions].slice(-100000),
+          }
+        }),
 
       setSearchOpen: (open) => set({ searchOpen: open }),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),

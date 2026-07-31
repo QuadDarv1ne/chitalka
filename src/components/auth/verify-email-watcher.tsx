@@ -77,7 +77,12 @@ export function VerifyEmailWatcher() {
   if (!token) return null
 
   return (
-    <Dialog open={!!token} onOpenChange={(o) => !o && close()}>
+    <Dialog
+      open={!!token}
+      onOpenChange={(o) => {
+        if (!o && status !== 'loading') close()
+      }}
+    >
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

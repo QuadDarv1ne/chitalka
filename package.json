@@ -3,9 +3,9 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000 2>&1 | tee dev.log",
-    "build": "next build && node -e \"const{cpSync}=require('fs');try{cpSync('.next/static','.next/standalone/.next/static',{recursive:true,force:true})}catch(e){process.stderr.write(e.message+'\\n')}try{cpSync('public','.next/standalone/public',{recursive:true,force:true})}catch(e){process.stderr.write(e.message+'\\n')}\"",
-    "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
+    "dev": "node scripts/run.mjs --log dev.log next dev -p 3000",
+    "build": "next build && node scripts/copy-standalone.mjs",
+    "start": "node scripts/run.mjs --prod --log server.log bun .next/standalone/server.js",
     "lint": "eslint .",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",

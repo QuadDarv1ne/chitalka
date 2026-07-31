@@ -59,7 +59,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { motion, AnimatePresence } from 'framer-motion'
-import { exportLibraryBackup } from '@/lib/export-utils'
+import { exportLibraryBackup, parseLibraryBackup } from '@/lib/export-utils'
 import { UserMenu } from '@/components/auth/user-menu'
 
 type SortKey = 'recent' | 'title' | 'added'
@@ -87,8 +87,10 @@ export function Library() {
   const settings = useReaderStore((s) => s.settings)
   const bookmarks = useReaderStore((s) => s.bookmarks)
   const removeBookData = useReaderStore((s) => s.removeBookData)
+  const restoreData = useReaderStore((s) => s.restoreData)
   const { user } = useAuth()
   const userId = user?.id ?? null
+  const restoreInput = useRef<HTMLInputElement>(null)
 
   // Sync book progress to server (when user is verified)
   useBookSync(books)
@@ -210,6 +212,41 @@ export function Library() {
       }
     },
     [refresh, removeBookData],
+  )
+
+  const handleRestore = useCallback(
+    async (files: FileList | null) => {
+      const file = files?.[0]
+      if (!file) return
+      try {
+        const backup = await parseLibraryBackup(file)
+        restoreData({
+          settings: backup.settings,
+          bookmarks: backup.bookmarks,
+          highlights: backup.highlights,
+          sessions: backup.sessions,
+        })
+        let serverImported = 0
+        if (user?.emailVerified) {
+          const res = await fetch('/api/user/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ backup }),
+          })
+          const data = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+          serverImported = data.imported ?? 0
+        }
+        toast.success(
+          `Восстановлено: закладок ${backup.bookmarks.length}, выделений ${backup.highlights.length}${serverImported ? `, книг на сервере ${serverImported}` : ''}`,
+        )
+        await refresh()
+      } catch (e) {
+        console.error(e)
+        toast.error(e instanceof Error ? e.message : 'Ошибка восстановления')
+      }
+    },
+    [refresh, restoreData, user?.emailVerified],
   )
 
   const filtered = useMemo(() => books
@@ -368,6 +405,12 @@ export function Library() {
                 ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  onClick={() => restoreInput.current?.click()}
+                >
+                  <UploadCloud className="h-4 w-4 mr-2" />
+                  Восстановить из копии (JSON)
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={async () => {
                     try {
                       await exportLibraryBackup(
@@ -406,6 +449,16 @@ export function Library() {
               className="hidden"
               onChange={(e) => {
                 if (e.target.files?.length) handleFiles(e.target.files)
+                e.target.value = ''
+              }}
+            />
+            <input
+              ref={restoreInput}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) handleRestore(e.target.files)
                 e.target.value = ''
               }}
             />

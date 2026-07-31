@@ -8,6 +8,12 @@ if (!process.env.JWT_SECRET) {
     throw new Error('JWT_SECRET environment variable is required in production')
   }
   console.warn('⚠️ JWT_SECRET not set — using a random dev-only secret. Set JWT_SECRET in .env for persistent sessions across restarts.')
+} else if (new TextEncoder().encode(process.env.JWT_SECRET).byteLength < 32) {
+  // HS256 requires a 256-bit key; jose rejects shorter secrets with an opaque error
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET must be at least 32 bytes long in production')
+  }
+  console.warn('⚠️ JWT_SECRET is shorter than 32 bytes — sessions will fail with jose. Set a longer JWT_SECRET in .env.')
 }
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || crypto.randomUUID(),
@@ -125,6 +131,16 @@ export function getSessionCookieName() {
 
 export function getSessionDuration(rememberMe?: boolean) {
   return rememberMe ? REMEMBER_ME_DURATION : DEFAULT_SESSION_DURATION
+}
+
+/**
+ * Whether the session cookie should carry the Secure flag.
+ * Override with COOKIE_SECURE=false when serving plain HTTP behind a
+ * reverse proxy (e.g. LAN deployments) — otherwise auth cookies are dropped.
+ */
+export function isCookieSecure(): boolean {
+  if (process.env.COOKIE_SECURE === 'false') return false
+  return process.env.NODE_ENV === 'production'
 }
 
 export function generateResetToken(): string {

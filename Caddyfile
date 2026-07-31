@@ -1,4 +1,16 @@
+# Production proxy for the Chitalka reader app.
+# The app runs on localhost:3000 (Next.js standalone).
+
+# IMPORTANT: the app sets Secure cookies in production. If you serve plain
+# HTTP on a LAN, set COOKIE_SECURE=false in the app's .env instead of using
+# this plain-HTTP site. Prefer TLS below (self-signed works on LANs).
 :81 {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
 	handle {
 		reverse_proxy localhost:3000 {
 			header_up Host {host}
@@ -8,3 +20,15 @@
 		}
 	}
 }
+
+# Optional TLS site (self-signed certificate for LAN use):
+# example.lan {
+# 	tls internal
+# 	encode zstd gzip
+# 	reverse_proxy localhost:3000 {
+# 		header_up Host {host}
+# 		header_up X-Forwarded-For {remote_host}
+# 		header_up X-Forwarded-Proto {scheme}
+# 		header_up X-Real-IP {remote_host}
+# 	}
+# }

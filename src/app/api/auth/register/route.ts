@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { hashPassword, createSession, getSessionCookieName, getSessionDuration, getClientIp, getUserAgent, generateResetToken } from '@/lib/auth'
+import { hashPassword, createSession, getSessionCookieName, getSessionDuration, getClientIp, getUserAgent, generateResetToken, isCookieSecure } from '@/lib/auth'
 import { applyRateLimit } from '@/lib/rate-limit'
 import { sendEmail } from '@/lib/email'
 import { getAppBaseUrl } from '@/lib/url'
@@ -137,7 +137,7 @@ ${verifyLink}
     const cookieStore = await cookies()
     cookieStore.set(getSessionCookieName(), token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isCookieSecure(),
       sameSite: 'lax',
       path: '/',
       maxAge: getSessionDuration(rememberMe),

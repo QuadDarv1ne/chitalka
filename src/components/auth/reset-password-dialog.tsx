@@ -45,13 +45,13 @@ export function ResetPasswordDialog({ open, token, onOpenChange }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         toast.error(data.error || 'Не удалось сбросить пароль')
         return
       }
       toast.success('Пароль изменён! Вы автоматически вошли в аккаунт')
-      await refresh()
+      await refresh().catch(() => {})
       onOpenChange(false)
     } finally {
       setSubmitting(false)

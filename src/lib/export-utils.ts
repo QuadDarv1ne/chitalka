@@ -4,6 +4,26 @@ import type { Highlight, ReaderSettings, Bookmark, ReadingSession } from '@/stor
 import type { BookRecord } from '@/lib/library'
 import { highlightColors } from '@/store/reader-store'
 
+export interface BackupData {
+  version: number
+  exportedAt: string
+  books: Array<{
+    bookId: string
+    title: string
+    author: string
+    format: string
+    size: number
+    addedAt: string
+    lastOpenedAt: string | null
+    progress: number
+    description?: string
+  }>
+  settings: ReaderSettings
+  bookmarks: Bookmark[]
+  highlights: Highlight[]
+  sessions: ReadingSession[]
+}
+
 /**
  * Export book highlights as a Markdown file and trigger download.
  */
@@ -27,7 +47,7 @@ export function exportHighlightsToMarkdown(
 
   for (let i = 0; i < sorted.length; i++) {
     const h = sorted[i]
-    const color = highlightColors[h.color]
+    const color = highlightColors[h.color] ?? highlightColors.yellow
     lines.push(`## ${i + 1}. Выделение (${color.label})`)
     lines.push('')
     lines.push('> ' + h.text.split('\n').join('\n> '))
@@ -67,7 +87,7 @@ export async function exportLibraryBackup(
   const books = await getAllBooks()
   // Strip blob (too large) - keep metadata only
   const booksMeta = books.map((b) => ({
-    id: b.id,
+    bookId: b.id,
     title: b.title,
     author: b.author,
     format: b.format,
@@ -78,7 +98,7 @@ export async function exportLibraryBackup(
     description: b.description,
   }))
   const backup = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     books: booksMeta,
     settings,
@@ -97,4 +117,37 @@ export async function exportLibraryBackup(
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+/**
+ * Parse a backup JSON file (from exportLibraryBackup).
+ * Returns the parsed data or throws a descriptive error.
+ */
+export async function parseLibraryBackup(file: File): Promise<BackupData> {
+  if (file.size > 20 * 1024 * 1024) {
+    throw new Error('Файл резервной копии слишком большой (>20 МБ)')
+  }
+  let raw: string
+  try {
+    raw = await file.text()
+  } catch {
+    throw new Error('Не удалось прочитать файл')
+  }
+  let data: unknown
+  try {
+    data = JSON.parse(raw)
+  } catch {
+    throw new Error('Файл не является корректным JSON')
+  }
+  if (!data || typeof data !== 'object') {
+    throw new Error('Некорректная структура резервной копии')
+  }
+  const backup = data as Record<string, unknown>
+  if (typeof backup.version !== 'number' || backup.version < 1 || backup.version > 2) {
+    throw new Error('Неподдерживаемая версия резервной копии')
+  }
+  if (!Array.isArray(backup.books) || backup.books.length > 5000) {
+    throw new Error('Некорректные данные книг в резервной копии')
+  }
+  return data as BackupData
 }
