@@ -5,6 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import {
   BookOpen,
   Upload,
   Search,
@@ -22,6 +29,7 @@ import {
   X,
   UploadCloud,
   Download,
+  Loader2,
 } from 'lucide-react'
 import {
   getAllBooks,
@@ -57,6 +65,8 @@ import { UserMenu } from '@/components/auth/user-menu'
 type SortKey = 'recent' | 'title' | 'added'
 type FormatFilter = 'all' | 'epub' | 'pdf' | 'txt' | 'md' | 'fb2' | 'html'
 
+const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200 MB
+
 export function Library() {
   const [books, setBooks] = useState<BookRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -64,6 +74,9 @@ export function Library() {
   const [sort, setSort] = useState<SortKey>('recent')
   const [formatFilter, setFormatFilter] = useState<FormatFilter>('all')
   const [dragOver, setDragOver] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<BookRecord | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const dragDepth = useRef(0)
   const fileInput = useRef<HTMLInputElement>(null)
   const openBook = useReaderStore((s) => s.openBook)
   const setView = useReaderStore((s) => s.setView)
@@ -73,6 +86,7 @@ export function Library() {
   const sessions = useReaderStore((s) => s.sessions)
   const settings = useReaderStore((s) => s.settings)
   const bookmarks = useReaderStore((s) => s.bookmarks)
+  const removeBookData = useReaderStore((s) => s.removeBookData)
   const { user } = useAuth()
   const userId = user?.id ?? null
 
@@ -99,7 +113,12 @@ export function Library() {
   // When user logs in, reassign anonymous books to their account (one-time)
   const reassignedRef = useRef(false)
   useEffect(() => {
-    if (!user || reassignedRef.current) return
+    if (!user) {
+      // Reset so the next login reassigns books imported while logged out
+      reassignedRef.current = false
+      return
+    }
+    if (reassignedRef.current) return
     reassignedRef.current = true
     ;(async () => {
       const count = await reassignBooksToUser(null, user.id)
@@ -108,13 +127,18 @@ export function Library() {
         refresh()
       }
     })()
-  }, [user?.id, refresh])
+  }, [user?.id, refresh, user])
 
   const handleFiles = useCallback(
     async (files: FileList) => {
       const list = Array.from(files)
       let imported = 0
+      let skipped = 0
       for (const file of list) {
+        if (file.size > MAX_FILE_SIZE) {
+          toast.error(`Файл слишком большой (макс. ${Math.round(MAX_FILE_SIZE / 1024 / 1024)} МБ): ${file.name}`)
+          continue
+        }
         const format = detectFormat(file.name)
         if (!format) {
           toast.error(`Формат не поддерживается: ${file.name}`)
@@ -136,6 +160,12 @@ export function Library() {
             }
           } else {
             meta = await parseTextMeta(file, format)
+          }
+          // Skip duplicates already in the library (same title + size)
+          const existing = await getAllBooks(userId)
+          if (existing.some((b) => b.title === meta.title && b.size === file.size)) {
+            skipped++
+            continue
           }
           const book: BookRecord = {
             id: crypto.randomUUID(),
@@ -159,18 +189,27 @@ export function Library() {
       if (imported > 0) {
         toast.success(`Импортировано книг: ${imported}`)
         await refresh()
+      } else if (skipped > 0) {
+        toast.info(`Пропущено дубликатов: ${skipped}`)
       }
     },
-    [refresh],
+    [refresh, userId],
   )
 
   const handleDelete = useCallback(
     async (id: string, title: string) => {
-      await deleteBook(id)
-      toast.success(`Удалено: ${title}`)
-      await refresh()
+      setDeleting(true)
+      try {
+        await deleteBook(id)
+        removeBookData(id)
+        toast.success(`Удалено: ${title}`)
+        await refresh()
+      } finally {
+        setDeleting(false)
+        setDeleteTarget(null)
+      }
     },
-    [refresh],
+    [refresh, removeBookData],
   )
 
   const filtered = useMemo(() => books
@@ -215,15 +254,27 @@ export function Library() {
   return (
     <div
       className="flex min-h-screen flex-col"
-      onDragOver={(e) => {
+      onDragEnter={(e) => {
         e.preventDefault()
+        dragDepth.current += 1
         setDragOver(true)
       }}
+      onDragOver={(e) => {
+        e.preventDefault()
+      }}
       onDragLeave={(e) => {
-        if (e.target === e.currentTarget) setDragOver(false)
+        e.preventDefault()
+        dragDepth.current = Math.max(0, dragDepth.current - 1)
+        if (dragDepth.current === 0) setDragOver(false)
+      }}
+      onDragEnd={(e) => {
+        e.preventDefault()
+        dragDepth.current = 0
+        setDragOver(false)
       }}
       onDrop={(e) => {
         e.preventDefault()
+        dragDepth.current = 0
         setDragOver(false)
         if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files)
       }}
@@ -426,7 +477,7 @@ export function Library() {
                   key={book.id}
                   book={book}
                   onOpen={() => openBook(book.id)}
-                  onDelete={() => handleDelete(book.id, book.title)}
+                  onDelete={() => setDeleteTarget(book)}
                 />
               ))}
             </div>
@@ -441,6 +492,36 @@ export function Library() {
           Перетащите файлы в окно для загрузки.
         </div>
       </footer>
+
+      {/* Delete confirmation */}
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && !deleting && setDeleteTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Удалить книгу?</DialogTitle>
+            <DialogDescription>
+              «{deleteTarget?.title}» будет удалена из библиотеки вместе с закладками,
+              выделениями и статистикой чтения. Это действие нельзя отменить.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => deleteTarget && handleDelete(deleteTarget.id, deleteTarget.title)}
+            >
+              {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Удалить
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

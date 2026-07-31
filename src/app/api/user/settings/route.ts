@@ -87,21 +87,21 @@ export async function PUT(req: Request) {
     }
     if (fontSize !== undefined) {
       const n = Number(fontSize)
-      if (n < 12 || n > 28) {
+      if (!Number.isFinite(n) || n < 12 || n > 28) {
         return NextResponse.json({ error: 'Размер шрифта 12-28' }, { status: 400 })
       }
       data.fontSize = n
     }
     if (lineHeight !== undefined) {
       const n = Number(lineHeight)
-      if (n < 1.2 || n > 2.4) {
+      if (!Number.isFinite(n) || n < 1.2 || n > 2.4) {
         return NextResponse.json({ error: 'Межстрочный 1.2-2.4' }, { status: 400 })
       }
       data.lineHeight = n
     }
     if (margin !== undefined) {
       const n = Number(margin)
-      if (n < 1 || n > 6) {
+      if (!Number.isFinite(n) || n < 1 || n > 6) {
         return NextResponse.json({ error: 'Поля 1-6' }, { status: 400 })
       }
       data.margin = n
@@ -113,11 +113,14 @@ export async function PUT(req: Request) {
       data.textAlign = textAlign
     }
     if (hyphens !== undefined) {
-      data.hyphens = Boolean(hyphens)
+      if (typeof hyphens !== 'boolean') {
+        return NextResponse.json({ error: 'hyphens: true/false' }, { status: 400 })
+      }
+      data.hyphens = hyphens
     }
     if (ttsRate !== undefined) {
       const n = Number(ttsRate)
-      if (n < 0.5 || n > 2.0) {
+      if (!Number.isFinite(n) || n < 0.5 || n > 2.0) {
         return NextResponse.json({ error: 'TTS скорость 0.5-2.0' }, { status: 400 })
       }
       data.ttsRate = n
@@ -127,7 +130,7 @@ export async function PUT(req: Request) {
     }
     if (dailyGoalMinutes !== undefined) {
       const n = Number(dailyGoalMinutes)
-      if (n < 5 || n > 240) {
+      if (!Number.isFinite(n) || n < 5 || n > 240) {
         return NextResponse.json({ error: 'Цель 5-240 мин' }, { status: 400 })
       }
       data.dailyGoalMinutes = n

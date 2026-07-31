@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     if (!rateLimit.ok) {
       return NextResponse.json(
         { error: 'Слишком много попыток. Попробуйте позже.' },
-        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rateLimit.retryAfter / 1000)) } },
       )
     }
     cleanupRateLimits()

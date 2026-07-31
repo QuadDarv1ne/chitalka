@@ -89,6 +89,7 @@ interface ReaderState {
   removeHighlight: (id: string) => void
 
   logReading: (bookId: string, minutes: number, pages: number) => void
+  removeBookData: (bookId: string) => void
 
   setSearchOpen: (open: boolean) => void
   setSidebarOpen: (open: boolean) => void
@@ -193,6 +194,13 @@ export const useReaderStore = create<ReaderState>()(
             sessions: [...s.sessions, { bookId, date, minutes: safeMinutes, pages: safePages }],
           }
         }),
+
+      removeBookData: (bookId) =>
+        set((s) => ({
+          bookmarks: s.bookmarks.filter((b) => b.bookId !== bookId),
+          highlights: s.highlights.filter((h) => h.bookId !== bookId),
+          sessions: s.sessions.filter((sess) => sess.bookId !== bookId),
+        })),
 
       setSearchOpen: (open) => set({ searchOpen: open }),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),

@@ -11,7 +11,8 @@ export interface HighlightSegment {
 
 /**
  * Split a paragraph text into segments, marking which ones are part of a highlight.
- * Each highlight is matched by its text (case-sensitive).
+ * Matching is whitespace-insensitive so highlights that span paragraph breaks
+ * still match inside each paragraph.
  */
 export function splitWithHighlights(
   text: string,
@@ -19,20 +20,33 @@ export function splitWithHighlights(
 ): HighlightSegment[] {
   if (!highlights.length) return [{ text }]
 
+  // Escape regex specials but keep whitespace runs as \s+ (paragraph splits
+  // render as \n\n inside a highlight, which never appears within a paragraph)
+  const toRegex = (s: string) =>
+    s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')
+
   // Collect all matches: {start, end, highlight}
   const matches: { start: number; end: number; highlight: Highlight }[] = []
   for (const h of highlights) {
     if (!h.text) continue
-    let from = 0
-    while (from < text.length) {
-      const idx = text.indexOf(h.text, from)
-      if (idx === -1) break
+    let re: RegExp
+    try {
+      re = new RegExp(toRegex(h.text), 'g')
+    } catch {
+      continue
+    }
+    let m: RegExpExecArray | null
+    while ((m = re.exec(text)) !== null) {
+      if (m[0].length === 0) {
+        re.lastIndex++
+        continue
+      }
       matches.push({
-        start: idx,
-        end: idx + h.text.length,
+        start: m.index,
+        end: m.index + m[0].length,
         highlight: h,
       })
-      from = idx + 1
+      if (m.index === re.lastIndex) re.lastIndex++
     }
   }
 

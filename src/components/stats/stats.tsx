@@ -17,6 +17,7 @@ import {
 import { useReaderStore } from '@/store/reader-store'
 import { getAllBooks, type BookRecord } from '@/lib/library'
 import { UserMenu } from '@/components/auth/user-menu'
+import { useAuth } from '@/hooks/use-auth'
 import {
   BarChart,
   Bar,
@@ -34,11 +35,13 @@ export function Stats() {
   const highlights = useReaderStore((s) => s.highlights)
   const bookmarks = useReaderStore((s) => s.bookmarks)
   const dailyGoalMinutes = useReaderStore((s) => s.settings.dailyGoalMinutes)
+  const { user } = useAuth()
+  const userId = user?.id ?? null
   const [books, setBooks] = useState<BookRecord[]>([])
 
   useEffect(() => {
-    getAllBooks().then(setBooks)
-  }, [])
+    getAllBooks(userId).then(setBooks)
+  }, [userId])
 
   // Today's reading time
   const todayDate = new Date().toISOString().slice(0, 10)

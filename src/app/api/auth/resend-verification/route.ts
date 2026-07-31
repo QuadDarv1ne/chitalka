@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { generateResetToken } from '@/lib/auth'
 import { sendEmail } from '@/lib/email'
 import { applyRateLimit } from '@/lib/rate-limit'
+import { getAppBaseUrl } from '@/lib/url'
 
 const VERIFY_DURATION_MS = 60 * 60 * 24 * 7 // 7 days
 
@@ -51,9 +52,7 @@ export async function POST(req: Request) {
       data: { userId: user.id, token, expiresAt },
     })
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
-      (req.headers.get('origin') ?? 'http://localhost:3000')
-    const verifyLink = `${baseUrl}/?verify=${token}`
+    const verifyLink = `${getAppBaseUrl(req)}/?verify=${token}`
 
     const html = `
       <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">

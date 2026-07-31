@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -35,7 +35,12 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'login', onSucces
   const [resetSent, setResetSent] = useState(false)
   const [resetLink, setResetLink] = useState<string | null>(null)
   const [registeredVerifyLink, setRegisteredVerifyLink] = useState<string | null>(null)
-  const { login, register } = useAuth()
+  const { login, register, refresh } = useAuth()
+
+  // Keep mode in sync when the dialog is reopened with a different initialMode
+  useEffect(() => {
+    if (open) setMode(initialMode)
+  }, [open, initialMode])
 
   const reset = () => {
     setEmail('')
@@ -172,6 +177,8 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'login', onSucces
               className="w-full"
               onClick={() => {
                 handleClose(false)
+                // Pick up the session created by the server
+                refresh()
                 onSuccess?.()
               }}
             >

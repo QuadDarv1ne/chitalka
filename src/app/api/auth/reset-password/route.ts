@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     if (!rateLimit.ok) {
       return NextResponse.json(
         { error: 'Слишком много попыток. Попробуйте позже.' },
-        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rateLimit.retryAfter / 1000)) } },
       )
     }
     cleanupRateLimits()
@@ -56,6 +56,10 @@ export async function POST(req: Request) {
         data: { usedAt: new Date() },
       }),
     ])
+
+    // Revoke all previous sessions — the account may have been compromised.
+    // A fresh session is created below.
+    await db.session.deleteMany({ where: { userId: updatedUser.id } })
 
     // Auto-login the user after reset
     const { token: sessionToken } = await createSession(

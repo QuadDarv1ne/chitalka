@@ -64,7 +64,10 @@ export function SearchDialog({ book }: Props) {
         const found: SearchResult[] = []
         let idx = lower.indexOf(q)
         while (idx !== -1 && found.length < 100) {
-          const pageNum = Math.floor(idx / PAGE_WORDS) + 1
+          // textContent offsets are characters, but positions are stored in words —
+          // convert the match to a word offset so navigation and labels are correct
+          const wordOffset = textContent.slice(0, idx).split(/\s+/).filter(Boolean).length
+          const pageNum = Math.floor(wordOffset / PAGE_WORDS) + 1
           const start = Math.max(0, idx - 50)
           const end = Math.min(textContent.length, idx + query.length + 50)
           const snippet =
@@ -74,7 +77,7 @@ export function SearchDialog({ book }: Props) {
           found.push({
             page: pageNum,
             snippet,
-            matchIndex: idx,
+            matchIndex: wordOffset,
           })
           idx = lower.indexOf(q, idx + 1)
         }
@@ -84,60 +87,73 @@ export function SearchDialog({ book }: Props) {
         const pdfjs = await import('pdfjs-dist')
         await initPdfWorker()
         const data = await book.blob.arrayBuffer()
-        const doc = await pdfjs.getDocument({ data }).promise
+        const loadingTask = pdfjs.getDocument({ data })
+        const doc = await loadingTask.promise
         const found: SearchResult[] = []
         const q = query.toLowerCase()
-        for (let i = 1; i <= doc.numPages && found.length < 50; i++) {
-          const page = await doc.getPage(i)
-          const content = await page.getTextContent()
-          const text = content.items.map((it: any) => it.str).join(' ')
-          const lower = text.toLowerCase()
-          const idx = lower.indexOf(q)
-          if (idx !== -1) {
-            const start = Math.max(0, idx - 50)
-            const end = Math.min(text.length, idx + query.length + 50)
-            const snippet =
-              (start > 0 ? '…' : '') +
-              text.slice(start, end) +
-              (end < text.length ? '…' : '')
-            found.push({ page: i, snippet, matchIndex: idx })
+        try {
+          for (let i = 1; i <= doc.numPages && found.length < 50; i++) {
+            const page = await doc.getPage(i)
+            const content = await page.getTextContent()
+            const text = content.items.map((it: any) => it.str).join(' ')
+            const lower = text.toLowerCase()
+            const idx = lower.indexOf(q)
+            if (idx !== -1) {
+              const start = Math.max(0, idx - 50)
+              const end = Math.min(text.length, idx + query.length + 50)
+              const snippet =
+                (start > 0 ? '…' : '') +
+                text.slice(start, end) +
+                (end < text.length ? '…' : '')
+              found.push({ page: i, snippet, matchIndex: idx })
+            }
           }
+        } finally {
+          // Release the document and its worker
+          loadingTask.destroy().catch(() => {})
         }
         setResults(found)
       } else if (book.format === 'epub') {
         // EPUB: use epub.js's built-in search via Book.spine
         const ePub = (await import('epubjs')).default
         const blobUrl = URL.createObjectURL(book.blob)
-        const epubBook = ePub(blobUrl)
-        await epubBook.ready
-        const spine = await epubBook.spine
-        const found: SearchResult[] = []
-        const q = query.toLowerCase()
-        for (const item of (spine as any).items) {
-          if (found.length >= 50) break
+        let epubBook: any = null
+        try {
+          epubBook = ePub(blobUrl)
+          await epubBook.ready
+          const spine = await epubBook.spine
+          const found: SearchResult[] = []
+          const q = query.toLowerCase()
+          for (const item of (spine as any).items) {
+            if (found.length >= 50) break
+            try {
+              const doc = await item.load(epubBook.load.bind(epubBook))
+              const text = doc.body?.textContent || ''
+              const lower = text.toLowerCase()
+              let idx = lower.indexOf(q)
+              while (idx !== -1 && found.length < 50) {
+                const start = Math.max(0, idx - 50)
+                const end = Math.min(text.length, idx + query.length + 50)
+                const snippet =
+                  (start > 0 ? '…' : '') +
+                  text.slice(start, end).replace(/\s+/g, ' ') +
+                  (end < text.length ? '…' : '')
+                found.push({
+                  page: item.index,
+                  snippet,
+                  matchIndex: idx,
+                })
+                idx = lower.indexOf(q, idx + 1)
+              }
+            } catch { console.warn('EPUB spine item load failed') }
+          }
+          setResults(found)
+        } finally {
           try {
-            const doc = await item.load(epubBook.load.bind(epubBook))
-            const text = doc.body?.textContent || ''
-            const lower = text.toLowerCase()
-            let idx = lower.indexOf(q)
-            while (idx !== -1 && found.length < 50) {
-              const start = Math.max(0, idx - 50)
-              const end = Math.min(text.length, idx + query.length + 50)
-              const snippet =
-                (start > 0 ? '…' : '') +
-                text.slice(start, end).replace(/\s+/g, ' ') +
-                (end < text.length ? '…' : '')
-              found.push({
-                page: item.index,
-                snippet,
-                matchIndex: idx,
-              })
-              idx = lower.indexOf(q, idx + 1)
-            }
-          } catch { console.warn('EPUB spine item load failed') }
+            epubBook?.destroy()
+          } catch { /* already destroyed */ }
+          URL.revokeObjectURL(blobUrl)
         }
-        URL.revokeObjectURL(blobUrl)
-        setResults(found)
       }
     } catch (e) {
       console.error('Search failed', e)

@@ -17,6 +17,8 @@ export function PdfReader({ book, onProgress }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const docRef = useRef<import('pdfjs-dist').PDFDocumentProxy | null>(null)
+  const loadingTaskRef = useRef<import('pdfjs-dist').PDFDocumentLoadingTask | null>(null)
+  const renderTaskRef = useRef<import('pdfjs-dist').RenderTask | null>(null)
   const onProgressRef = useRef(onProgress)
   const [totalPages, setTotalPages] = useState(0)
   const [page, setPage] = useState(book.pdfPage ?? 1)
@@ -48,7 +50,9 @@ export function PdfReader({ book, onProgress }: Props) {
         const pdfjs = await import('pdfjs-dist')
         await initPdfWorker()
         const data = await book.blob.arrayBuffer()
-        const doc = await pdfjs.getDocument({ data }).promise
+        const loadingTask = pdfjs.getDocument({ data })
+        loadingTaskRef.current = loadingTask
+        const doc = await loadingTask.promise
         if (cancelled) return
         docRef.current = doc
         setTotalPages(doc.numPages)
@@ -61,8 +65,13 @@ export function PdfReader({ book, onProgress }: Props) {
     return () => {
       cancelled = true
       try {
+        renderTaskRef.current?.cancel()
         docRef.current?.cleanup()
+        // Fully release the document and its worker
+        loadingTaskRef.current?.destroy().catch(() => {})
       } catch { console.warn('PDF cleanup failed') }
+      docRef.current = null
+      loadingTaskRef.current = null
     }
   }, [book.id, book.blob])
 
@@ -72,6 +81,8 @@ export function PdfReader({ book, onProgress }: Props) {
       const doc = docRef.current
       const canvas = canvasRef.current
       if (!doc || !canvas) return
+      // Cancel any in-flight render to avoid concurrent draws on the same canvas
+      renderTaskRef.current?.cancel()
       setPageLoading(true)
       try {
         const pdfPage = await doc.getPage(pageNum)
@@ -84,11 +95,13 @@ export function PdfReader({ book, onProgress }: Props) {
         canvas.style.height = `${viewport.height}px`
         const ctx = canvas.getContext('2d')!
         ctx.scale(dpr, dpr)
-        await pdfPage.render({
+        const renderTask = pdfPage.render({
           canvasContext: ctx,
           viewport,
           canvas,
-        } as any).promise
+        } as any)
+        renderTaskRef.current = renderTask
+        await renderTask.promise
         // Apply theme to canvas background
         const bg =
           settings.theme === 'dark' || settings.theme === 'contrast'
@@ -96,6 +109,7 @@ export function PdfReader({ book, onProgress }: Props) {
             : '#ffffff'
         canvas.style.background = bg
       } catch (e) {
+        if ((e as { name?: string })?.name === 'RenderingCancelledException') return
         console.error('PDF render failed', e)
       } finally {
         setPageLoading(false)
@@ -132,7 +146,8 @@ export function PdfReader({ book, onProgress }: Props) {
   // Keyboard nav
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
       if (e.key === 'ArrowLeft') prev()
       else if (e.key === 'ArrowRight') next()
       else if (e.key === '+' || e.key === '=') setScale((s) => Math.min(3, s + 0.2))

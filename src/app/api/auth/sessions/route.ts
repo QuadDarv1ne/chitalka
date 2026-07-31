@@ -75,7 +75,13 @@ export async function DELETE(req: Request) {
       )
     }
 
-    await revokeSession(sessionId)
+    const count = await revokeSession(user.id, sessionId)
+    if (count === 0) {
+      return NextResponse.json(
+        { error: 'Сессия не найдена' },
+        { status: 404 },
+      )
+    }
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error('Delete session error', e)

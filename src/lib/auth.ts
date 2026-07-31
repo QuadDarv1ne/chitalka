@@ -42,11 +42,13 @@ export async function createSession(
   const duration = options?.rememberMe ? REMEMBER_ME_DURATION : DEFAULT_SESSION_DURATION
   const expiresAt = new Date(Date.now() + duration * 1000)
 
-  // Persist session in DB for tracking/revocation
+  // Persist session in DB for tracking/revocation.
+  // Use a random placeholder token so concurrent session creations never
+  // collide on the unique `token` column.
   const session = await db.session.create({
     data: {
       userId: payload.userId,
-      token: '', // will be updated after JWT creation
+      token: crypto.randomUUID(),
       userAgent: options?.userAgent?.slice(0, 500) || null,
       ip: options?.ip || null,
       expiresAt,
@@ -91,8 +93,14 @@ export async function verifySession(
   }
 }
 
-export async function revokeSession(sessionId: string): Promise<void> {
-  await db.session.deleteMany({ where: { id: sessionId } })
+export async function revokeSession(
+  userId: string,
+  sessionId: string,
+): Promise<number> {
+  const result = await db.session.deleteMany({
+    where: { id: sessionId, userId },
+  })
+  return result.count
 }
 
 export async function revokeAllSessionsExcept(
@@ -127,11 +135,20 @@ export function generateResetToken(): string {
     .join('')
 }
 
+/**
+ * Extract the client IP, taking the last address in X-Forwarded-For.
+ * A trusted reverse proxy appends the real client IP, so the rightmost
+ * value cannot be forged by the client (it can only prepend values).
+ */
 export function getClientIp(req: Request): string | undefined {
   const forwarded = req.headers.get('x-forwarded-for')
-  if (forwarded) return forwarded.split(',')[0].trim()
+  if (forwarded) {
+    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean)
+    const ip = parts[parts.length - 1]
+    if (ip && ip.length <= 64) return ip
+  }
   const real = req.headers.get('x-real-ip')
-  if (real) return real
+  if (real && real.length <= 64) return real
   return undefined
 }
 

@@ -75,15 +75,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) {
         return { ok: false, error: data.error || 'Ошибка регистрации' }
       }
+      if (data._devVerifyLink) {
+        // In dev the user must see the verification link; keep the dialog open
+        // and only pick up the session when the flow is finished
+        return { ok: true, verifyLink: data._devVerifyLink }
+      }
       setUser(data.user)
-      return { ok: true, verifyLink: data._devVerifyLink }
+      return { ok: true }
     },
     [],
   )
 
   const logout = useCallback(async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    setUser(null)
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch {
+      // Network failure — clear local state anyway
+    } finally {
+      setUser(null)
+    }
   }, [])
 
   const updateProfile = useCallback(

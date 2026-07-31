@@ -20,9 +20,9 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}))
     const { books } = body ?? {}
 
-    if (!Array.isArray(books)) {
+    if (!Array.isArray(books) || books.length > 5000) {
       return NextResponse.json(
-        { error: 'books должен быть массивом' },
+        { error: 'books должен быть массивом (макс. 5000)' },
         { status: 400 },
       )
     }
@@ -31,16 +31,25 @@ export async function POST(req: Request) {
     let created = 0
 
     for (const book of books) {
+      if (!book || typeof book !== 'object') continue
       if (!book.bookId || !book.title) continue
+
+      const bookId = String(book.bookId).slice(0, 200)
+      if (!bookId) continue
+      const lastOpenedAt =
+        typeof book.lastOpenedAt === 'string' || book.lastOpenedAt instanceof Date
+          ? new Date(book.lastOpenedAt)
+          : null
+      if (lastOpenedAt && Number.isNaN(lastOpenedAt.getTime())) continue
 
       const data = {
         userId: user.id,
-        bookId: String(book.bookId),
+        bookId,
         title: String(book.title).slice(0, 500),
         author: String(book.author || '').slice(0, 300),
         format: String(book.format || 'unknown').slice(0, 20),
         progress: Math.max(0, Math.min(1, Number(book.progress) || 0)),
-        lastOpenedAt: book.lastOpenedAt ? new Date(book.lastOpenedAt) : null,
+        lastOpenedAt,
       }
 
       const existing = await db.bookMeta.findUnique({

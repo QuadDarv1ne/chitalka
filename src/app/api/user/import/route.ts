@@ -2,6 +2,21 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/session'
 
+const VALID_FORMATS = ['epub', 'fb2', 'pdf', 'txt', 'md', 'html']
+const VALID_THEMES = ['light', 'dark', 'sepia', 'contrast']
+const VALID_FONTS = ['serif', 'sans', 'mono']
+const VALID_ALIGN = ['left', 'justify']
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(max, Math.max(min, n))
+}
+
+function clampString(value: unknown, maxLength: number, fallback: string): string {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, maxLength) : fallback
+}
+
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser()
@@ -19,55 +34,71 @@ export async function POST(req: Request) {
       )
     }
 
-    let imported = 0
-    if (Array.isArray(backup.books)) {
-      for (const book of backup.books) {
-        if (!book.bookId) continue
-        await db.bookMeta.upsert({
-          where: { userId_bookId: { userId: user.id, bookId: book.bookId } },
-          update: {
-            title: book.title ?? '',
-            author: book.author ?? '',
-            format: book.format ?? 'txt',
-            progress: book.progress ?? 0,
-            lastOpenedAt: book.lastOpenedAt ? new Date(book.lastOpenedAt) : null,
-          },
-          create: {
-            userId: user.id,
-            bookId: book.bookId,
-            title: book.title ?? '',
-            author: book.author ?? '',
-            format: book.format ?? 'txt',
-            progress: book.progress ?? 0,
-            lastOpenedAt: book.lastOpenedAt ? new Date(book.lastOpenedAt) : null,
-          },
-        })
-        imported++
-      }
+    if (!Array.isArray(backup.books) || backup.books.length > 5000) {
+      return NextResponse.json(
+        { error: 'Некорректные данные резервной копии' },
+        { status: 400 },
+      )
     }
 
-    // Restore settings if provided
-    if (backup.settings) {
-      await db.userSettings.upsert({
-        where: { userId: user.id },
+    let imported = 0
+    for (const book of backup.books) {
+      if (!book || typeof book !== 'object') continue
+      const bookId = typeof book.bookId === 'string' ? book.bookId.slice(0, 200) : ''
+      if (!bookId) continue
+
+      const format = VALID_FORMATS.includes(book.format) ? book.format : 'txt'
+      const progress = clampNumber(book.progress, 0, 1, 0)
+      const lastOpenedAt =
+        typeof book.lastOpenedAt === 'string' || book.lastOpenedAt instanceof Date
+          ? new Date(book.lastOpenedAt)
+          : null
+      if (lastOpenedAt && Number.isNaN(lastOpenedAt.getTime())) continue
+
+      await db.bookMeta.upsert({
+        where: { userId_bookId: { userId: user.id, bookId } },
         update: {
-          theme: backup.settings.theme ?? undefined,
-          fontFamily: backup.settings.fontFamily ?? undefined,
-          fontSize: backup.settings.fontSize ?? undefined,
-          lineHeight: backup.settings.lineHeight ?? undefined,
-          margin: backup.settings.margin ?? undefined,
-          textAlign: backup.settings.textAlign ?? undefined,
+          title: clampString(book.title, 500, ''),
+          author: clampString(book.author, 300, ''),
+          format,
+          progress,
+          lastOpenedAt,
         },
         create: {
           userId: user.id,
-          theme: backup.settings.theme ?? 'light',
-          fontFamily: backup.settings.fontFamily ?? 'serif',
-          fontSize: backup.settings.fontSize ?? 18,
-          lineHeight: backup.settings.lineHeight ?? 1.7,
-          margin: backup.settings.margin ?? 3,
-          textAlign: backup.settings.textAlign ?? 'justify',
+          bookId,
+          title: clampString(book.title, 500, ''),
+          author: clampString(book.author, 300, ''),
+          format,
+          progress,
+          lastOpenedAt,
         },
       })
+      imported++
+    }
+
+    // Restore settings if provided
+    if (backup.settings && typeof backup.settings === 'object') {
+      const s = backup.settings
+      const settingsData: Record<string, unknown> = {}
+      if (VALID_THEMES.includes(s.theme)) settingsData.theme = s.theme
+      if (VALID_FONTS.includes(s.fontFamily)) settingsData.fontFamily = s.fontFamily
+      if (Number.isFinite(Number(s.fontSize))) settingsData.fontSize = clampNumber(s.fontSize, 12, 28, 18)
+      if (Number.isFinite(Number(s.lineHeight))) settingsData.lineHeight = clampNumber(s.lineHeight, 1.2, 2.4, 1.7)
+      if (Number.isFinite(Number(s.margin))) settingsData.margin = clampNumber(s.margin, 1, 6, 3)
+      if (VALID_ALIGN.includes(s.textAlign)) settingsData.textAlign = s.textAlign
+      if (typeof s.hyphens === 'boolean') settingsData.hyphens = s.hyphens
+      if (Number.isFinite(Number(s.ttsRate))) settingsData.ttsRate = clampNumber(s.ttsRate, 0.5, 2, 1)
+      if (s.ttsVoice === null || typeof s.ttsVoice === 'string') settingsData.ttsVoice = s.ttsVoice
+      if (Number.isFinite(Number(s.dailyGoalMinutes))) settingsData.dailyGoalMinutes = clampNumber(s.dailyGoalMinutes, 5, 240, 30)
+
+      if (Object.keys(settingsData).length > 0) {
+        await db.userSettings.upsert({
+          where: { userId: user.id },
+          update: settingsData,
+          create: { userId: user.id, ...settingsData },
+        })
+      }
     }
 
     return NextResponse.json({ ok: true, imported })

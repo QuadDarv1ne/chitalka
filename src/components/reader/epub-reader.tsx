@@ -101,6 +101,8 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
 
     // Keyboard nav
     const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
       if (e.key === 'ArrowLeft') {
         prev()
       } else if (e.key === 'ArrowRight') {
@@ -146,6 +148,10 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       try {
         rendition.destroy()
       } catch { console.warn('Rendition destroy failed') }
+      try {
+        // Fully release the archive/zip resources
+        epubBook.destroy()
+      } catch { console.warn('EPUB book destroy failed') }
       URL.revokeObjectURL(blobUrl)
       bookRef.current = null
       renditionRef.current = null

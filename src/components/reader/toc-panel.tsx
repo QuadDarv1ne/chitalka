@@ -37,10 +37,12 @@ export function TocPanel({ book, onNavigate }: Props) {
     setLoading(true)
     ;(async () => {
       if (book.format === 'epub') {
+        let epubBook: any = null
+        let blobUrl = ''
         try {
           const ePub = (await import('epubjs')).default
-          const blobUrl = URL.createObjectURL(book.blob)
-          const epubBook = ePub(blobUrl)
+          blobUrl = URL.createObjectURL(book.blob)
+          epubBook = ePub(blobUrl)
           await epubBook.ready
           const navigation = await epubBook.loaded.navigation
           if (cancelled) return
@@ -58,16 +60,21 @@ export function TocPanel({ book, onNavigate }: Props) {
           const flattened = flatten(navigation.toc || [])
           tocCache.set(book.id, flattened)
           setToc(flattened)
-          URL.revokeObjectURL(blobUrl)
         } catch (e) {
           console.error(e)
+        } finally {
+          try {
+            epubBook?.destroy()
+          } catch { /* already destroyed */ }
+          if (blobUrl) URL.revokeObjectURL(blobUrl)
         }
       } else if (book.format === 'pdf') {
+        let doc: any = null
         try {
           const pdfjs = await import('pdfjs-dist')
           await initPdfWorker()
           const data = await book.blob.arrayBuffer()
-          const doc = await pdfjs.getDocument({ data }).promise
+          doc = await pdfjs.getDocument({ data }).promise
           const items: TocItem[] = []
           const outline = await doc.getOutline().catch(() => [])
           const walk = async (nodes: any[], level = 0) => {
@@ -110,6 +117,8 @@ export function TocPanel({ book, onNavigate }: Props) {
           }
         } catch (e) {
           console.error(e)
+        } finally {
+          doc?.destroy().catch(() => {})
         }
       } else {
         // For text/markdown/fb2, generate TOC from headings

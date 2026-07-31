@@ -3,7 +3,9 @@ import { db } from '@/lib/db'
 import { hashPassword, createSession, getSessionCookieName, getSessionDuration, getClientIp, getUserAgent, generateResetToken } from '@/lib/auth'
 import { applyRateLimit } from '@/lib/rate-limit'
 import { sendEmail } from '@/lib/email'
+import { getAppBaseUrl } from '@/lib/url'
 import { cookies } from 'next/headers'
+import { Prisma } from '@prisma/client'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const VERIFY_DURATION_MS = 60 * 60 * 24 * 7 // 7 days
@@ -60,13 +62,25 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await hashPassword(password)
-    const user = await db.user.create({
-      data: {
-        email: normalizedEmail,
-        name: typeof name === 'string' && name.trim() ? name.trim() : null,
-        passwordHash,
-      },
-    })
+    let user
+    try {
+      user = await db.user.create({
+        data: {
+          email: normalizedEmail,
+          name: typeof name === 'string' && name.trim() ? name.trim() : null,
+          passwordHash,
+        },
+      })
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        // Concurrent registration race — same email created between check and create
+        return NextResponse.json(
+          { error: 'Не удалось создать аккаунт. Попробуйте другой email или войдите, если аккаунт уже существует.' },
+          { status: 409 },
+        )
+      }
+      throw e
+    }
 
     // Generate email verification token
     const verifyToken = generateResetToken()
@@ -75,9 +89,7 @@ export async function POST(req: Request) {
       data: { userId: user.id, token: verifyToken, expiresAt: verifyExpiresAt },
     })
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
-      (req.headers.get('origin') ?? 'http://localhost:3000')
-    const verifyLink = `${baseUrl}/?verify=${verifyToken}`
+    const verifyLink = `${getAppBaseUrl(req)}/?verify=${verifyToken}`
 
     const html = `
       <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">

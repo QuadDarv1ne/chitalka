@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   ArrowLeft,
@@ -14,6 +14,8 @@ import {
 } from 'lucide-react'
 import { useReaderStore } from '@/store/reader-store'
 import { getBook, updateBook, type BookRecord } from '@/lib/library'
+import { syncBooksToServer } from '@/hooks/use-book-sync'
+import { useAuth } from '@/hooks/use-auth'
 import { EpubReader } from './epub-reader'
 import { TxtReader } from './txt-reader'
 import { PdfReader } from './pdf-reader'
@@ -44,6 +46,7 @@ export function Reader() {
   const bookmarksOpen = useReaderStore((s) => s.sidebarOpen)
   const setBookmarksOpen = useReaderStore((s) => s.setSidebarOpen)
   const setSearchOpen = useReaderStore((s) => s.setSearchOpen)
+  const { user } = useAuth()
   const [book, setBook] = useState<BookRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [progress, setProgress] = useState(0)
@@ -72,6 +75,22 @@ export function Reader() {
       cancelled = true
     }
   }, [currentBookId])
+
+  // Push the final progress to the server when the reader closes,
+  // so progress made while the library was unmounted is not lost
+  const bookIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    bookIdRef.current = book?.id ?? null
+  }, [book?.id])
+  useEffect(() => {
+    return () => {
+      const id = bookIdRef.current
+      if (!id || !user?.emailVerified) return
+      getBook(id).then((b) => {
+        if (b) syncBooksToServer([b])
+      })
+    }
+  }, [user])
 
   const handleProgressChange = useCallback(
     async (p: number, extra?: { cfi?: string; textPosition?: number; pdfPage?: number }) => {

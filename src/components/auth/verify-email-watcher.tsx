@@ -54,7 +54,7 @@ export function VerifyEmailWatcher() {
           setStatus('error')
           setErrorMessage(data.error || 'Ошибка подтверждения')
         }
-      } catch (_e) {
+      } catch {
         if (cancelled) return
         setStatus('error')
         setErrorMessage('Сеть или сервер недоступен')

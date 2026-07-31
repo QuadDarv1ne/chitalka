@@ -93,12 +93,17 @@ export function Account() {
 
   const handleSaveProfile = async () => {
     setSavingProfile(true)
-    const result = await updateProfile(name)
-    setSavingProfile(false)
-    if (result.ok) {
-      toast.success('Профиль обновлён')
-    } else {
-      toast.error(result.error || 'Ошибка')
+    try {
+      const result = await updateProfile(name)
+      if (result.ok) {
+        toast.success('Профиль обновлён')
+      } else {
+        toast.error(result.error || 'Ошибка')
+      }
+    } catch {
+      toast.error('Ошибка сети')
+    } finally {
+      setSavingProfile(false)
     }
   }
 
@@ -112,15 +117,20 @@ export function Account() {
       return
     }
     setSavingPassword(true)
-    const result = await changePassword(currentPassword, newPassword)
-    setSavingPassword(false)
-    if (result.ok) {
-      toast.success('Пароль изменён')
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
-    } else {
-      toast.error(result.error || 'Ошибка')
+    try {
+      const result = await changePassword(currentPassword, newPassword)
+      if (result.ok) {
+        toast.success('Пароль изменён')
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+      } else {
+        toast.error(result.error || 'Ошибка')
+      }
+    } catch {
+      toast.error('Ошибка сети')
+    } finally {
+      setSavingPassword(false)
     }
   }
 
@@ -173,15 +183,20 @@ export function Account() {
 
   const handleDeleteAccount = async () => {
     setDeleting(true)
-    const result = await deleteAccount(deletePassword)
-    setDeleting(false)
-    if (result.ok) {
-      toast.success('Аккаунт удалён')
-      setDeleteDialogOpen(false)
-      setDeletePassword('')
-      setView('library')
-    } else {
-      toast.error(result.error || 'Ошибка')
+    try {
+      const result = await deleteAccount(deletePassword)
+      if (result.ok) {
+        toast.success('Аккаунт удалён')
+        setDeleteDialogOpen(false)
+        setDeletePassword('')
+        setView('library')
+      } else {
+        toast.error(result.error || 'Ошибка')
+      }
+    } catch {
+      toast.error('Ошибка сети')
+    } finally {
+      setDeleting(false)
     }
   }
 

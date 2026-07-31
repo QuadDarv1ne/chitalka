@@ -5,7 +5,8 @@ import { useReaderStore } from '@/store/reader-store'
 
 /**
  * Tracks reading time and pages flipped.
- * Logs to the global store every 60s or on unmount.
+ * Logs time every 60s and pages on every flush (so page counts survive
+ * quick sessions and tab closes mid-session).
  */
 export function useReadingTracker(bookId: string, pagesFlipped: number) {
   const logReading = useReaderStore((s) => s.logReading)
@@ -24,26 +25,26 @@ export function useReadingTracker(bookId: string, pagesFlipped: number) {
   useEffect(() => {
     startTimeRef.current = Date.now()
     lastFlushRef.current = Date.now()
+    pagesRef.current = 0
     const id = bookIdRef.current
-    const interval = setInterval(() => {
-      const now = Date.now()
+
+    const flush = (now: number, flushPages: boolean) => {
       const elapsedMin = Math.floor((now - lastFlushRef.current) / 60000)
-      if (elapsedMin >= 1) {
-        logReading(id, elapsedMin, 0)
+      const pages = pagesRef.current
+      if (elapsedMin >= 1 || (flushPages && pages > 0)) {
+        logReading(id, elapsedMin, pages)
         lastFlushRef.current = now
+        pagesRef.current = 0
       }
+    }
+
+    const interval = setInterval(() => {
+      flush(Date.now(), true)
     }, 5000)
     return () => {
       clearInterval(interval)
-      const now = Date.now()
-      const elapsedMin = Math.floor((now - lastFlushRef.current) / 60000)
-      if (elapsedMin > 0) {
-        logReading(bookIdRef.current, elapsedMin, 0)
-      }
-      const totalMin = Math.floor((now - startTimeRef.current) / 60000)
-      if (totalMin > 0) {
-        logReading(bookIdRef.current, 0, pagesRef.current)
-      }
+      // Final flush — captures sub-minute sessions and page counts
+      flush(Date.now(), true)
     }
   }, [logReading])
 }

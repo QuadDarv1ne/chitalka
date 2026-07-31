@@ -85,14 +85,23 @@ export async function deleteBook(id: string) {
   await db.delete('books', id)
 }
 
+// Serialize read-modify-write per book: page turns fire many unawaited
+// updateBook calls, and interleaved reads could persist a stale patch last.
+const writeQueues = new Map<string, Promise<void>>()
+
 export async function updateBook(
   id: string,
   patch: Partial<Omit<BookRecord, 'id'>>,
 ) {
-  const db = await getDB()
-  const existing = await db.get('books', id)
-  if (!existing) return
-  await db.put('books', { ...existing, ...patch })
+  const prev = writeQueues.get(id) ?? Promise.resolve()
+  const next = prev.then(async () => {
+    const db = await getDB()
+    const existing = await db.get('books', id)
+    if (!existing) return
+    await db.put('books', { ...existing, ...patch })
+  })
+  writeQueues.set(id, next.catch(() => {}))
+  return next
 }
 
 /**

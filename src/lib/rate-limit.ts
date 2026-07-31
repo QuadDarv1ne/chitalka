@@ -49,6 +49,12 @@ export function checkRateLimit(
     }
   }
 
+  // Block expired: reset the entry so the next request starts a fresh window.
+  // Without this, a stale count (still > max) would instantly re-block.
+  if (entry?.blockedUntil && entry.blockedUntil <= now && entry.count > options.max) {
+    buckets.delete(key)
+  }
+
   // Reset if window expired
   if (!entry || now - entry.firstRequestAt > options.windowMs) {
     buckets.set(key, {
@@ -77,11 +83,18 @@ export function checkRateLimit(
 
 /**
  * Get client identifier for rate limiting.
- * Combines IP + endpoint for per-endpoint limits.
+ * Uses the rightmost X-Forwarded-For value (appended by a trusted proxy),
+ * so clients cannot spoof a fresh identity by prepending headers.
  */
 export function getRateLimitKey(req: Request, endpoint: string): string {
   const forwarded = req.headers.get('x-forwarded-for')
-  const ip = forwarded?.split(',')[0].trim() || req.headers.get('x-real-ip') || 'unknown'
+  let ip = ''
+  if (forwarded) {
+    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean)
+    ip = parts[parts.length - 1] ?? ''
+  }
+  if (!ip) ip = req.headers.get('x-real-ip') ?? ''
+  if (!ip || ip.length > 64) ip = 'unknown'
   return `${ip}:${endpoint}`
 }
 

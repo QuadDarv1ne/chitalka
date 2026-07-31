@@ -10,7 +10,7 @@ export async function POST() {
     if (token) {
       const payload = await verifySession(token)
       if (payload?.sessionId) {
-        await revokeSession(payload.sessionId)
+        await revokeSession(payload.userId, payload.sessionId)
       }
     }
 

@@ -147,6 +147,7 @@ export function TxtReader({ book, onProgress }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
       if (e.key === 'ArrowLeft') prev()
       else if (e.key === 'ArrowRight') next()
     }

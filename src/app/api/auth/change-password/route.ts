@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getCurrentUser } from '@/lib/session'
-import { verifyPassword, hashPassword } from '@/lib/auth'
+import { getCurrentUser, getSessionPayload } from '@/lib/session'
+import { verifyPassword, hashPassword, revokeAllSessionsExcept } from '@/lib/auth'
 
 export async function POST(req: Request) {
   try {
@@ -54,6 +54,12 @@ export async function POST(req: Request) {
       where: { id: user.id },
       data: { passwordHash: newHash },
     })
+
+    // Revoke all other sessions — the password may have been compromised
+    const currentSession = await getSessionPayload()
+    if (currentSession?.sessionId) {
+      await revokeAllSessionsExcept(user.id, currentSession.sessionId)
+    }
 
     return NextResponse.json({ ok: true })
   } catch (e) {
