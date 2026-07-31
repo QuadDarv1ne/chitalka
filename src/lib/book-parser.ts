@@ -2,6 +2,7 @@
 
 import type { BookRecord } from '@/lib/library'
 import { initPdfWorker } from '@/lib/pdf-worker'
+import { decodeTextBytes } from '@/lib/text-encoding'
 
 export interface ParsedBook {
   title: string
@@ -105,7 +106,20 @@ async function unzip(buffer: ArrayBuffer): Promise<ZipEntry> {
           break
         }
       }
-      if (descPos === -1) break
+      if (descPos === -1) {
+        // No descriptor found — a corrupt entry. Resume scanning for the
+        // next local file header so later entries (e.g. container.xml) survive.
+        let next = -1
+        for (let i = dataStart; i < scanEnd - 4; i++) {
+          if (view.getUint32(i, true) === 0x04034b50) {
+            next = i
+            break
+          }
+        }
+        if (next === -1) break
+        offset = next
+        continue
+      }
       compressedSize = view.getUint32(descPos + 4, true)
       uncompressedSize = view.getUint32(descPos + 8, true)
       offset = descPos + 12
@@ -221,7 +235,7 @@ export async function parseFb2Meta(file: File): Promise<ParsedBook> {
     format: 'fb2',
   }
   try {
-    const text = await file.text()
+    const text = decodeTextBytes(await file.arrayBuffer())
     // Use DOMParser to parse XML
     const parser = new DOMParser()
     // Strip XML declaration to avoid issues
@@ -288,7 +302,7 @@ export async function parseFb2Meta(file: File): Promise<ParsedBook> {
  */
 export async function parseFb2Content(file: File): Promise<string> {
   try {
-    const text = await file.text()
+    const text = decodeTextBytes(await file.arrayBuffer())
     const parser = new DOMParser()
     const cleaned = text.replace(/^<\?xml[^>]*\?>/, '')
     const doc = parser.parseFromString(cleaned, 'application/xml')
@@ -354,7 +368,8 @@ export async function parseFb2Content(file: File): Promise<string> {
 }
 
 export async function parseTextMeta(file: File, format: 'txt' | 'md' | 'html'): Promise<ParsedBook> {
-  const text = await file.slice(0, 4096).text()
+  const head = await file.slice(0, 4096).arrayBuffer()
+  const text = decodeTextBytes(head)
   // For markdown, try first H1
   const h1 = text.match(/^#\s+(.+)$/m)
   const title = h1 ? h1[1].trim() : file.name.replace(/\.[^.]+$/, '')

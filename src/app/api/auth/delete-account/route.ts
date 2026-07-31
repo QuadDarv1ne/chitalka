@@ -2,11 +2,27 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/session'
 import { verifyPassword } from '@/lib/auth'
+import { applyRateLimit } from '@/lib/rate-limit'
+import { readJsonBody } from '@/lib/http'
 import { cookies } from 'next/headers'
 import { getSessionCookieName } from '@/lib/auth'
 
 export async function POST(req: Request) {
   try {
+    // Rate limit: brute-force guard for the password-verifying endpoint
+    const rl = applyRateLimit(req, 'login')
+    if (!rl.ok) {
+      return NextResponse.json(
+        {
+          error: `Слишком много попыток. Попробуйте через ${Math.ceil(rl.retryAfter / 60000)} мин`,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(Math.ceil(rl.retryAfter / 1000)) },
+        },
+      )
+    }
+
     const user = await getCurrentUser()
     if (!user) {
       return NextResponse.json(
@@ -15,10 +31,10 @@ export async function POST(req: Request) {
       )
     }
 
-    const body = await req.json().catch(() => ({}))
+    const body = await readJsonBody<{ password?: unknown }>(req)
     const { password } = body ?? {}
 
-    if (!password) {
+    if (typeof password !== 'string' || !password) {
       return NextResponse.json(
         { error: 'Пароль обязателен для подтверждения' },
         { status: 400 },

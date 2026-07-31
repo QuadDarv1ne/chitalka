@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { useReaderStore } from '@/store/reader-store'
 import type { BookRecord } from '@/lib/library'
 import { PAGE_WORDS } from '@/lib/constants'
 import { initPdfWorker } from '@/lib/pdf-worker'
+import { decodeTextBlob } from '@/lib/text-encoding'
 
 interface Props {
   book: BookRecord
@@ -37,16 +38,28 @@ export function SearchDialog({ book }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [searched, setSearched] = useState(false)
   const [textContent, setTextContent] = useState<string>('')
+  const [textLoaded, setTextLoaded] = useState(false)
+  // Monotonic counter: stale (out-of-order) search results are discarded
+  const searchSeqRef = useRef(0)
+  const openRef = useRef(open)
+  openRef.current = open
 
   // Load text content (for TXT/MD/FB2)
   useEffect(() => {
     if (!open) return
     let cancelled = false
     if (book.format === 'txt' || book.format === 'md' || book.format === 'fb2') {
-      book.blob.text().then((text) => {
-        if (!cancelled) setTextContent(text)
-      })
+      setTextLoaded(false)
+      decodeTextBlob(book.blob)
+        .then((text) => {
+          if (!cancelled) {
+            setTextContent(text)
+            setTextLoaded(true)
+          }
+        })
+        .catch((e) => console.error(e))
     }
     return () => { cancelled = true }
   }, [open, book])
@@ -54,9 +67,15 @@ export function SearchDialog({ book }: Props) {
   const search = useCallback(async () => {
     if (!query.trim()) {
       setResults([])
+      setSearched(false)
       return
     }
+    if (!textLoaded && (book.format === 'txt' || book.format === 'md' || book.format === 'fb2')) {
+      return
+    }
+    const seq = ++searchSeqRef.current
     setLoading(true)
+    setSearched(true)
     try {
       if (book.format === 'txt' || book.format === 'md' || book.format === 'fb2') {
         const lower = textContent.toLowerCase()
@@ -81,7 +100,7 @@ export function SearchDialog({ book }: Props) {
           })
           idx = lower.indexOf(q, idx + 1)
         }
-        setResults(found)
+        if (searchSeqRef.current === seq && openRef.current) setResults(found)
       } else if (book.format === 'pdf') {
         // Search PDF pages via pdfjs
         const pdfjs = await import('pdfjs-dist')
@@ -93,6 +112,7 @@ export function SearchDialog({ book }: Props) {
         const q = query.toLowerCase()
         try {
           for (let i = 1; i <= doc.numPages && found.length < 50; i++) {
+            if (searchSeqRef.current !== seq) return
             const page = await doc.getPage(i)
             const content = await page.getTextContent()
             const text = content.items.map((it: any) => it.str).join(' ')
@@ -112,7 +132,7 @@ export function SearchDialog({ book }: Props) {
           // Release the document and its worker
           loadingTask.destroy().catch(() => {})
         }
-        setResults(found)
+        if (searchSeqRef.current === seq && openRef.current) setResults(found)
       } else if (book.format === 'epub') {
         // EPUB: use epub.js's built-in search via Book.spine
         const ePub = (await import('epubjs')).default
@@ -125,7 +145,7 @@ export function SearchDialog({ book }: Props) {
           const found: SearchResult[] = []
           const q = query.toLowerCase()
           for (const item of (spine as any).items) {
-            if (found.length >= 50) break
+            if (found.length >= 50 || searchSeqRef.current !== seq) break
             try {
               const doc = await item.load(epubBook.load.bind(epubBook))
               const text = doc.body?.textContent || ''
@@ -147,7 +167,7 @@ export function SearchDialog({ book }: Props) {
               }
             } catch { console.warn('EPUB spine item load failed') }
           }
-          setResults(found)
+          if (searchSeqRef.current === seq && openRef.current) setResults(found)
         } finally {
           try {
             epubBook?.destroy()
@@ -158,9 +178,9 @@ export function SearchDialog({ book }: Props) {
     } catch (e) {
       console.error('Search failed', e)
     } finally {
-      setLoading(false)
+      if (searchSeqRef.current === seq) setLoading(false)
     }
-  }, [query, book, textContent])
+  }, [query, book, textContent, textLoaded])
 
   const goTo = useCallback(
     (result: SearchResult) => {
@@ -185,8 +205,12 @@ export function SearchDialog({ book }: Props) {
   // Reset on close
   useEffect(() => {
     if (!open) {
+      searchSeqRef.current++
       setQuery('')
       setResults([])
+      setSearched(false)
+      setTextContent('')
+      setTextLoaded(false)
     }
   }, [open])
 
@@ -226,7 +250,7 @@ export function SearchDialog({ book }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <Button type="submit" disabled={loading || !query.trim()}>
+          <Button type="submit" disabled={loading || !query.trim() || !textLoaded}>
             Найти
           </Button>
         </form>
@@ -252,7 +276,7 @@ export function SearchDialog({ book }: Props) {
                 </button>
               </li>
             ))}
-            {results.length === 0 && query && !loading && (
+            {results.length === 0 && searched && !loading && (
               <p className="text-center text-sm text-muted-foreground py-8">
                 Ничего не найдено
               </p>

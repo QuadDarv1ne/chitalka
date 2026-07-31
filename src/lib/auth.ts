@@ -81,13 +81,20 @@ export async function verifySession(
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET)
     const sessionPayload = payload as unknown as SessionPayload
+    if (typeof sessionPayload.userId !== 'string' || !sessionPayload.userId) {
+      return null
+    }
 
-    // Verify session exists in DB and is not expired
+    // Verify session exists in DB, is not expired, and belongs to the user
     if (sessionPayload.sessionId) {
       const session = await db.session.findUnique({
         where: { id: sessionPayload.sessionId },
       })
-      if (!session || session.expiresAt < new Date()) {
+      if (
+        !session ||
+        session.expiresAt < new Date() ||
+        session.userId !== sessionPayload.userId
+      ) {
         return null
       }
     }
@@ -116,6 +123,10 @@ export async function revokeAllSessionsExcept(
   await db.session.deleteMany({
     where: { userId, NOT: { id: exceptSessionId } },
   })
+}
+
+export async function revokeAllSessions(userId: string): Promise<void> {
+  await db.session.deleteMany({ where: { userId } })
 }
 
 export async function getUserSessions(userId: string) {
@@ -152,16 +163,18 @@ export function generateResetToken(): string {
 }
 
 /**
- * Extract the client IP, taking the last address in X-Forwarded-For.
- * A trusted reverse proxy appends the real client IP, so the rightmost
- * value cannot be forged by the client (it can only prepend values).
+ * Extract the client IP for session logging.
+ * X-Forwarded-For is only trusted when TRUST_PROXY=true (a configured
+ * reverse proxy strips client-supplied XFF and appends the real IP).
  */
 export function getClientIp(req: Request): string | undefined {
-  const forwarded = req.headers.get('x-forwarded-for')
-  if (forwarded) {
-    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean)
-    const ip = parts[parts.length - 1]
-    if (ip && ip.length <= 64) return ip
+  if (process.env.TRUST_PROXY === 'true') {
+    const forwarded = req.headers.get('x-forwarded-for')
+    if (forwarded) {
+      const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean)
+      const ip = parts[parts.length - 1]
+      if (ip && ip.length <= 64) return ip
+    }
   }
   const real = req.headers.get('x-real-ip')
   if (real && real.length <= 64) return real

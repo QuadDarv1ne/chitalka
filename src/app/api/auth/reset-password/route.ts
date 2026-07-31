@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { hashPassword, createSession, getSessionCookieName, getSessionDuration, getClientIp, getUserAgent, isCookieSecure } from '@/lib/auth'
 import { applyRateLimit, cleanupRateLimits } from '@/lib/rate-limit'
+import { readJsonBody } from '@/lib/http'
 import { cookies } from 'next/headers'
 
 export async function POST(req: Request) {
@@ -15,10 +16,10 @@ export async function POST(req: Request) {
     }
     cleanupRateLimits()
 
-    const body = await req.json()
+    const body = await readJsonBody<{ token?: unknown; password?: unknown }>(req)
     const { token, password } = body ?? {}
 
-    if (!token || !password) {
+    if (typeof token !== 'string' || typeof password !== 'string' || !token || !password) {
       return NextResponse.json(
         { error: 'Token и пароль обязательны' },
         { status: 400 },
@@ -32,12 +33,24 @@ export async function POST(req: Request) {
       )
     }
 
+    // Atomically claim the token — a concurrent request with the same token
+    // will see count === 0 and fail instead of using the token twice.
+    const claimed = await db.passwordReset.updateMany({
+      where: { token, usedAt: null, expiresAt: { gt: new Date() } },
+      data: { usedAt: new Date() },
+    })
+    if (claimed.count !== 1) {
+      return NextResponse.json(
+        { error: 'Ссылка недействительна или устарела' },
+        { status: 400 },
+      )
+    }
+
     const reset = await db.passwordReset.findUnique({
       where: { token },
       include: { user: true },
     })
-
-    if (!reset || reset.usedAt || reset.expiresAt < new Date()) {
+    if (!reset || !reset.user) {
       return NextResponse.json(
         { error: 'Ссылка недействительна или устарела' },
         { status: 400 },
@@ -45,17 +58,10 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await hashPassword(password)
-
-    const [updatedUser] = await Promise.all([
-      db.user.update({
-        where: { id: reset.userId },
-        data: { passwordHash },
-      }),
-      db.passwordReset.update({
-        where: { id: reset.id },
-        data: { usedAt: new Date() },
-      }),
-    ])
+    const updatedUser = await db.user.update({
+      where: { id: reset.userId },
+      data: { passwordHash },
+    })
 
     // Revoke all previous sessions — the account may have been compromised.
     // A fresh session is created below.

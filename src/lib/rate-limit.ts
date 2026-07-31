@@ -83,18 +83,28 @@ export function checkRateLimit(
 
 /**
  * Get client identifier for rate limiting.
- * Uses the rightmost X-Forwarded-For value (appended by a trusted proxy),
- * so clients cannot spoof a fresh identity by prepending headers.
+ *
+ * X-Forwarded-For is only trusted when the app runs behind a reverse proxy
+ * that strips client-supplied XFF (Caddy/nginx append their own value and
+ * should be configured to drop incoming XFF). Without TRUST_PROXY=true the
+ * client could forge a fresh identity per request and bypass every limit.
  */
 export function getRateLimitKey(req: Request, endpoint: string): string {
-  const forwarded = req.headers.get('x-forwarded-for')
+  const trustProxy = process.env.TRUST_PROXY === 'true'
   let ip = ''
-  if (forwarded) {
-    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean)
-    ip = parts[parts.length - 1] ?? ''
+  if (trustProxy) {
+    const forwarded = req.headers.get('x-forwarded-for')
+    if (forwarded) {
+      const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean)
+      ip = parts[parts.length - 1] ?? ''
+    }
   }
   if (!ip) ip = req.headers.get('x-real-ip') ?? ''
-  if (!ip || ip.length > 64) ip = 'unknown'
+  // No real IP available — key by UA+endpoint to at least slow down scripts
+  if (!ip || ip.length > 64) {
+    const ua = trustProxy ? '' : (req.headers.get('user-agent') ?? '').slice(0, 64)
+    return `${ua || 'unknown'}:${endpoint}`
+  }
   return `${ip}:${endpoint}`
 }
 
@@ -113,6 +123,7 @@ export const RATE_LIMITS = {
   resetPassword: { max: 10, windowMs: 60 * 60 * 1000, blockMs: 30 * 60 * 1000 },
   resendVerification: { max: 3, windowMs: 60 * 60 * 1000, blockMs: 30 * 60 * 1000 },
   verifyEmail: { max: 20, windowMs: 60 * 60 * 1000 },
+  booksSync: { max: 120, windowMs: 10 * 60 * 1000, blockMs: 10 * 60 * 1000 },
 } as const
 
 /**

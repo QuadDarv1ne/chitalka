@@ -58,6 +58,8 @@ export function Account() {
   const [deletePassword, setDeletePassword] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [sendingVerify, setSendingVerify] = useState(false)
+  const [revokingId, setRevokingId] = useState<string | null>(null)
+  const [revokingAll, setRevokingAll] = useState(false)
 
   useEffect(() => {
     if (user) setName(user.name ?? '')
@@ -142,7 +144,7 @@ export function Account() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: user.email }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (res.ok) {
         toast.success('Письмо отправлено')
         if (data._devVerifyLink) {
@@ -164,20 +166,36 @@ export function Account() {
   }
 
   const handleRevokeSession = async (sessionId: string) => {
-    const res = await fetch(`/api/auth/sessions?id=${sessionId}`, { method: 'DELETE' })
-    if (res.ok) {
-      toast.success('Сессия завершена')
-      loadSessions()
-    } else {
-      toast.error('Не удалось завершить сессию')
+    setRevokingId(sessionId)
+    try {
+      const res = await fetch(`/api/auth/sessions?id=${sessionId}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Сессия завершена')
+        loadSessions()
+      } else {
+        toast.error('Не удалось завершить сессию')
+      }
+    } catch {
+      toast.error('Ошибка сети')
+    } finally {
+      setRevokingId(null)
     }
   }
 
   const handleRevokeOthers = async () => {
-    const res = await fetch('/api/auth/sessions?action=revoke-others', { method: 'DELETE' })
-    if (res.ok) {
-      toast.success('Другие сессии завершены')
-      loadSessions()
+    setRevokingAll(true)
+    try {
+      const res = await fetch('/api/auth/sessions?action=revoke-others', { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Другие сессии завершены')
+        loadSessions()
+      } else {
+        toast.error('Не удалось завершить другие сессии')
+      }
+    } catch {
+      toast.error('Ошибка сети')
+    } finally {
+      setRevokingAll(false)
     }
   }
 
@@ -435,9 +453,14 @@ export function Account() {
                       size="icon"
                       className="h-8 w-8 text-muted-foreground hover:text-destructive"
                       onClick={() => handleRevokeSession(s.id)}
+                      disabled={revokingId === s.id}
                       aria-label="Завершить сессию"
                     >
-                      <LogOut className="h-3.5 w-3.5" />
+                      {revokingId === s.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <LogOut className="h-3.5 w-3.5" />
+                      )}
                     </Button>
                   )}
                 </li>
@@ -450,9 +473,14 @@ export function Account() {
               variant="outline"
               size="sm"
               onClick={handleRevokeOthers}
+              disabled={revokingAll}
               className="mt-4 w-full gap-1.5"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              {revokingAll ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <LogOut className="h-3.5 w-3.5" />
+              )}
               Завершить все другие сессии
             </Button>
           )}
@@ -521,27 +549,34 @@ export function Account() {
               Введите пароль для подтверждения.
             </DialogDescription>
           </DialogHeader>
-          <Input
-            type="password"
-            placeholder="Пароль"
-            value={deletePassword}
-            onChange={(e) => setDeletePassword(e.target.value)}
-            autoComplete="current-password"
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Отмена
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteAccount}
-              disabled={deleting || !deletePassword}
-              className="gap-1.5"
-            >
-              {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
-              Удалить аккаунт
-            </Button>
-          </DialogFooter>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!deleting && deletePassword) handleDeleteAccount()
+            }}
+          >
+            <Input
+              type="password"
+              placeholder="Пароль"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              autoComplete="current-password"
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+                Отмена
+              </Button>
+              <Button
+                variant="destructive"
+                type="submit"
+                disabled={deleting || !deletePassword}
+                className="gap-1.5"
+              >
+                {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                Удалить аккаунт
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

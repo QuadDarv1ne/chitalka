@@ -116,6 +116,30 @@ const defaultSettings: ReaderSettings = {
   dailyGoalMinutes: 30,
 }
 
+/**
+ * Local calendar date (YYYY-MM-DD) — sessions are grouped by local day,
+ * UTC slicing would shift midnight for UTC+X users.
+ */
+export function localDateString(d: Date): string {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 10)
+}
+
+/** Merge a possibly-incomplete stored settings object over the defaults. */
+function mergeSettings(partial: Partial<ReaderSettings> | null | undefined): ReaderSettings {
+  const base = { ...defaultSettings }
+  if (partial && typeof partial === 'object') {
+    for (const key of Object.keys(defaultSettings) as (keyof ReaderSettings)[]) {
+      const v = (partial as Record<string, unknown>)[key]
+      if (v !== undefined && v !== null) {
+        ;(base as Record<string, unknown>)[key] = v
+      }
+    }
+  }
+  return base
+}
+
 export const useReaderStore = create<ReaderState>()(
   persist(
     (set, _get) => ({
@@ -179,7 +203,7 @@ export const useReaderStore = create<ReaderState>()(
         set((s) => {
           const safeMinutes = Math.max(0, Math.min(minutes, 1440))
           const safePages = Math.max(0, Math.min(pages, 10000))
-          const date = new Date().toISOString().slice(0, 10)
+          const date = localDateString(new Date())
           const existing = s.sessions.find(
             (sess) => sess.bookId === bookId && sess.date === date,
           )
@@ -189,13 +213,14 @@ export const useReaderStore = create<ReaderState>()(
                 sess === existing
                   ? {
                       ...sess,
-                      minutes: sess.minutes + safeMinutes,
-                      pages: sess.pages + safePages,
+                      minutes: Math.min(1440, sess.minutes + safeMinutes),
+                      pages: Math.min(10000, sess.pages + safePages),
                     }
                   : sess,
               ),
             }
           }
+          if (s.sessions.length >= 100000) return {}
           return {
             sessions: [...s.sessions, { bookId, date, minutes: safeMinutes, pages: safePages }],
           }
@@ -220,13 +245,25 @@ export const useReaderStore = create<ReaderState>()(
           const restoredHighlights = highlights
             .filter((h) => !existingHighlightIds.has(h.id) && validColor(h.color))
             .slice(0, 10000)
+          // Merge sessions by (bookId, date) — sessions have no id, so a
+          // naive append would double-count stats when restoring twice.
+          const sessionKey = (sess: ReadingSession) => `${sess.bookId}:${sess.date}`
+          const merged = new Map<string, ReadingSession>()
+          for (const sess of [...s.sessions, ...sessions]) {
+            const key = sessionKey(sess)
+            const prev = merged.get(key)
+            if (!prev) merged.set(key, sess)
+            else merged.set(key, {
+              ...sess,
+              minutes: Math.min(1440, prev.minutes + sess.minutes),
+              pages: Math.min(10000, prev.pages + sess.pages),
+            })
+          }
           return {
-            settings: { ...s.settings, ...settings },
+            settings: mergeSettings(settings),
             bookmarks: [...s.bookmarks, ...restoredBookmarks],
             highlights: [...s.highlights, ...restoredHighlights],
-            sessions: s.sessions.length >= 100000
-              ? s.sessions
-              : [...s.sessions, ...sessions].slice(-100000),
+            sessions: Array.from(merged.values()).slice(-100000),
           }
         }),
 
@@ -245,10 +282,14 @@ export const useReaderStore = create<ReaderState>()(
         sessions: s.sessions,
       }),
       migrate: (state: any, version: number) => {
+        let next = state
         if (version === 0) {
-          return { ...state, sessions: state.sessions ?? [] }
+          next = { ...state, sessions: state.sessions ?? [] }
         }
-        return state as ReaderState
+        return {
+          ...next,
+          settings: mergeSettings(next?.settings),
+        }
       },
     },
   ),

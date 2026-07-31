@@ -13,7 +13,7 @@ import {
   Keyboard,
 } from 'lucide-react'
 import { useReaderStore } from '@/store/reader-store'
-import { getBook, updateBook, type BookRecord } from '@/lib/library'
+import { getBook, updateBook, flushBookWrites, type BookRecord } from '@/lib/library'
 import { syncBooksToServer } from '@/hooks/use-book-sync'
 import { useAuth } from '@/hooks/use-auth'
 import { EpubReader } from './epub-reader'
@@ -52,9 +52,11 @@ export function Reader() {
   const [progress, setProgress] = useState(0)
   const [activeTab, setActiveTab] = useState<SidebarTab>('toc')
   const [helpOpen, setHelpOpen] = useState(false)
-  const [currentCfi, setCurrentCfi] = useState<string | undefined>(book?.cfi)
-  const [currentTextPosition, setCurrentTextPosition] = useState<number | undefined>(book?.textPosition)
-  const [currentPdfPage, setCurrentPdfPage] = useState<number | undefined>(book?.pdfPage)
+  // Position state fills in after the book loads (useState(book?.x) only
+  // sees book===null on first render)
+  const [currentCfi, setCurrentCfi] = useState<string | undefined>(undefined)
+  const [currentTextPosition, setCurrentTextPosition] = useState<number | undefined>(undefined)
+  const [currentPdfPage, setCurrentPdfPage] = useState<number | undefined>(undefined)
 
   useEffect(() => {
     if (!currentBookId) return
@@ -64,6 +66,9 @@ export function Reader() {
         if (cancelled) return
         setBook(b ?? null)
         setProgress(b?.progress ?? 0)
+        setCurrentCfi(b?.cfi)
+        setCurrentTextPosition(b?.textPosition)
+        setCurrentPdfPage(b?.pdfPage)
         if (b) {
           updateBook(b.id, { lastOpenedAt: Date.now() })
         }
@@ -76,19 +81,31 @@ export function Reader() {
     }
   }, [currentBookId])
 
-  // Push the final progress to the server when the reader closes,
-  // so progress made while the library was unmounted is not lost
+  // Push the final progress to the server when the reader closes or the tab
+  // is hidden/closed — progress made while the library was unmounted is not lost.
   const bookIdRef = useRef<string | null>(null)
   useEffect(() => {
     bookIdRef.current = book?.id ?? null
   }, [book?.id])
   useEffect(() => {
-    return () => {
+    const flushSync = () => {
       const id = bookIdRef.current
       if (!id || !user?.emailVerified) return
-      getBook(id).then((b) => {
-        if (b) syncBooksToServer([b])
-      })
+      ;(async () => {
+        try {
+          // Wait for queued updateBook writes so the synced progress is fresh
+          await flushBookWrites(id)
+          const b = await getBook(id)
+          if (b) await syncBooksToServer([b])
+        } catch (e) {
+          console.error('Final sync failed', e)
+        }
+      })()
+    }
+    window.addEventListener('pagehide', flushSync)
+    return () => {
+      window.removeEventListener('pagehide', flushSync)
+      flushSync()
     }
   }, [user])
 
@@ -104,7 +121,7 @@ export function Reader() {
         cfi: extra?.cfi ?? book.cfi,
         textPosition: extra?.textPosition ?? book.textPosition,
         pdfPage: extra?.pdfPage ?? book.pdfPage,
-      })
+      }).catch((e) => console.error('Progress save failed', e))
     },
     [book],
   )

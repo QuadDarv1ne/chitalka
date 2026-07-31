@@ -4,11 +4,21 @@ import { hashPassword, createSession, getSessionCookieName, getSessionDuration, 
 import { applyRateLimit } from '@/lib/rate-limit'
 import { sendEmail } from '@/lib/email'
 import { getAppBaseUrl } from '@/lib/url'
+import { readJsonBody } from '@/lib/http'
 import { cookies } from 'next/headers'
 import { Prisma } from '@prisma/client'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const VERIFY_DURATION_MS = 60 * 60 * 24 * 7 // 7 days
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
 export async function POST(req: Request) {
   try {
@@ -26,15 +36,16 @@ export async function POST(req: Request) {
       )
     }
 
-    const body = await req.json()
+    const body = await readJsonBody<{ email?: unknown; password?: unknown; name?: unknown; rememberMe?: unknown }>(req)
     const { email, password, name, rememberMe } = body ?? {}
-
-    if (!email || !password) {
+    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
       return NextResponse.json(
         { error: 'Email и пароль обязательны' },
         { status: 400 },
       )
     }
+
+    const remember = rememberMe === true
 
     const normalizedEmail = email.toLowerCase().trim()
     if (!EMAIL_RE.test(normalizedEmail)) {
@@ -62,12 +73,13 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await hashPassword(password)
+    const displayName = typeof name === 'string' ? name.trim().slice(0, 100) : ''
     let user
     try {
       user = await db.user.create({
         data: {
           email: normalizedEmail,
-          name: typeof name === 'string' && name.trim() ? name.trim() : null,
+          name: displayName || null,
           passwordHash,
         },
       })
@@ -90,12 +102,13 @@ export async function POST(req: Request) {
     })
 
     const verifyLink = `${getAppBaseUrl(req)}/?verify=${verifyToken}`
+    const escapedName = escapeHtml(displayName)
 
     const html = `
       <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
         <h2 style="color: #1c1c1c;">Добро пожаловать в Читалку!</h2>
         <p style="color: #555; line-height: 1.6;">
-          Здравствуйте${user.name ? `, ${user.name}` : ''}!
+          Здравствуйте${escapedName ? `, ${escapedName}` : ''}!
         </p>
         <p style="color: #555; line-height: 1.6;">
           Ваш аккаунт создан. Пожалуйста, подтвердите ваш email:
@@ -111,7 +124,7 @@ export async function POST(req: Request) {
         </p>
       </div>
     `
-    const text = `Здравствуйте${user.name ? `, ${user.name}` : ''}!
+    const text = `Здравствуйте${displayName ? `, ${displayName}` : ''}!
 
 Ваш аккаунт в Читалке создан. Подтвердите email:
 ${verifyLink}
@@ -128,7 +141,7 @@ ${verifyLink}
     const { token } = await createSession(
       { userId: user.id, email: user.email, name: user.name },
       {
-        rememberMe: !!rememberMe,
+        rememberMe: remember,
         userAgent: getUserAgent(req),
         ip: getClientIp(req),
       },
@@ -140,7 +153,7 @@ ${verifyLink}
       secure: isCookieSecure(),
       sameSite: 'lax',
       path: '/',
-      maxAge: getSessionDuration(rememberMe),
+      maxAge: getSessionDuration(remember),
     })
 
     return NextResponse.json({

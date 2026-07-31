@@ -4,6 +4,7 @@ import { generateResetToken } from '@/lib/auth'
 import { sendEmail } from '@/lib/email'
 import { applyRateLimit } from '@/lib/rate-limit'
 import { getAppBaseUrl } from '@/lib/url'
+import { readJsonBody } from '@/lib/http'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const RESET_DURATION_MS = 60 * 60 * 1000 // 1 hour
@@ -22,10 +23,10 @@ export async function POST(req: Request) {
       )
     }
 
-    const body = await req.json()
+    const body = await readJsonBody<{ email?: unknown }>(req)
     const { email } = body ?? {}
 
-    if (!email || !EMAIL_RE.test(email)) {
+    if (typeof email !== 'string' || !EMAIL_RE.test(email)) {
       return NextResponse.json(
         { error: 'Некорректный email' },
         { status: 400 },
@@ -40,6 +41,9 @@ export async function POST(req: Request) {
       where: { email: normalizedEmail },
     })
 
+    // Equalize response time for existing/non-existing accounts
+    const dummyToken = generateResetToken()
+
     let resetLink: string | undefined
 
     if (user) {
@@ -48,7 +52,7 @@ export async function POST(req: Request) {
         where: { userId: user.id, usedAt: null },
       })
 
-      const token = generateResetToken()
+      const token = dummyToken
       const expiresAt = new Date(Date.now() + RESET_DURATION_MS)
       await db.passwordReset.create({
         data: {

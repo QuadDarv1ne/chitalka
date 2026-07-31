@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/session'
+import { applyRateLimit } from '@/lib/rate-limit'
+import { readJsonBody } from '@/lib/http'
 
 /**
  * POST /api/books/sync — sync local book metadata to server
@@ -9,6 +11,14 @@ import { getCurrentUser } from '@/lib/session'
  */
 export async function POST(req: Request) {
   try {
+    const rl = applyRateLimit(req, 'booksSync')
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Слишком много запросов. Попробуйте позже.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfter / 1000)) } },
+      )
+    }
+
     const user = await getCurrentUser()
     if (!user) {
       return NextResponse.json(
@@ -17,7 +27,7 @@ export async function POST(req: Request) {
       )
     }
 
-    const body = await req.json().catch(() => ({}))
+    const body = await readJsonBody<{ books?: unknown }>(req, 2 * 1024 * 1024)
     const { books } = body ?? {}
 
     if (!Array.isArray(books) || books.length > 5000) {
@@ -27,55 +37,54 @@ export async function POST(req: Request) {
       )
     }
 
-    let updated = 0
-    let created = 0
+    let synced = 0
 
+    const tasks = []
     for (const book of books) {
       if (!book || typeof book !== 'object') continue
-      if (!book.bookId || !book.title) continue
+      const raw = book as Record<string, unknown>
+      if (typeof raw.bookId !== 'string' || typeof raw.title !== 'string') continue
 
-      const bookId = String(book.bookId).slice(0, 200)
+      const bookId = raw.bookId.slice(0, 200)
       if (!bookId) continue
       const lastOpenedAt =
-        typeof book.lastOpenedAt === 'string' || book.lastOpenedAt instanceof Date
-          ? new Date(book.lastOpenedAt)
+        typeof raw.lastOpenedAt === 'string' || raw.lastOpenedAt instanceof Date
+          ? new Date(raw.lastOpenedAt)
           : null
       if (lastOpenedAt && Number.isNaN(lastOpenedAt.getTime())) continue
 
       const data = {
         userId: user.id,
         bookId,
-        title: String(book.title).slice(0, 500),
-        author: String(book.author || '').slice(0, 300),
-        format: String(book.format || 'unknown').slice(0, 20),
-        progress: Math.max(0, Math.min(1, Number(book.progress) || 0)),
+        title: raw.title.slice(0, 500),
+        author: typeof raw.author === 'string' ? raw.author.slice(0, 300) : '',
+        format: typeof raw.format === 'string' ? raw.format.slice(0, 20) : 'unknown',
+        progress: Math.max(0, Math.min(1, Number(raw.progress) || 0)),
         lastOpenedAt,
       }
 
-      const existing = await db.bookMeta.findUnique({
-        where: {
-          userId_bookId: { userId: user.id, bookId: data.bookId },
-        },
-      })
-
-      if (existing) {
-        // Only update if local data is newer
-        const localDate = data.lastOpenedAt?.getTime() ?? 0
-        const serverDate = existing.lastOpenedAt?.getTime() ?? 0
-        if (localDate >= serverDate) {
-          await db.bookMeta.update({
-            where: { id: existing.id },
-            data,
+      // upsert is race-safe (concurrent syncs from two devices cannot
+      // both fail on a unique-constraint violation) and replaces the N+1.
+      tasks.push(
+        db.bookMeta
+          .upsert({
+            where: { userId_bookId: { userId: user.id, bookId } },
+            update: data,
+            create: data,
           })
-          updated++
-        }
-      } else {
-        await db.bookMeta.create({ data })
-        created++
-      }
+          .then(() => 1)
+          .catch(() => 0),
+      )
     }
 
-    return NextResponse.json({ ok: true, created, updated })
+    // Run in bounded batches — SQLite is single-writer, avoid 5000 queued writes
+    const BATCH = 50
+    for (let i = 0; i < tasks.length; i += BATCH) {
+      const results = await Promise.all(tasks.slice(i, i + BATCH))
+      synced += results.reduce((sum, r) => sum + r, 0)
+    }
+
+    return NextResponse.json({ ok: true, synced })
   } catch (e) {
     console.error('Sync books error', e)
     return NextResponse.json(

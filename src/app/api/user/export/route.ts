@@ -58,9 +58,8 @@ export async function GET() {
     }
 
     const json = JSON.stringify(exportData, null, 2)
-    const blob = new Blob([json], { type: 'application/json' })
 
-    return new NextResponse(blob as any, {
+    return new NextResponse(json, {
       headers: {
         'Content-Type': 'application/json',
         'Content-Disposition': `attachment; filename="reader-account-${user.email.replace(/[@.]/g, '_')}-${new Date().toISOString().slice(0, 10)}.json"`,

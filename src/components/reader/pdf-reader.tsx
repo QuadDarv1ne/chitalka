@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Loader2, ZoomIn, ZoomOut } from 'lucide-reac
 import type { BookRecord } from '@/lib/library'
 import { useReaderStore } from '@/store/reader-store'
 import { initPdfWorker } from '@/lib/pdf-worker'
+import { useReadingTracker } from '@/hooks/use-reading-tracker'
 
 interface Props {
   book: BookRecord
@@ -41,6 +42,9 @@ export function PdfReader({ book, onProgress }: Props) {
 
   onProgressRef.current = onProgress
 
+  // Reading time tracking (pages visited)
+  useReadingTracker(book.id, page)
+
   // Load PDF document
   useEffect(() => {
     let cancelled = false
@@ -56,8 +60,12 @@ export function PdfReader({ book, onProgress }: Props) {
         if (cancelled) return
         docRef.current = doc
         setTotalPages(doc.numPages)
+        // Clamp the restored page — the saved page may exceed the page count
+        setPage((p) => Math.max(1, Math.min(p, doc.numPages)))
+        setPageInput((v) => String(Math.max(1, Math.min(Number(v) || 1, doc.numPages))))
         setLoading(false)
       } catch (e) {
+        if (cancelled) return
         console.error('PDF load failed', e)
         setLoading(false)
       }
@@ -85,6 +93,13 @@ export function PdfReader({ book, onProgress }: Props) {
       renderTaskRef.current?.cancel()
       setPageLoading(true)
       try {
+        // Apply the theme background before the render starts, so there is
+        // no white flash on dark/contrast themes
+        const bg =
+          settings.theme === 'dark' || settings.theme === 'contrast'
+            ? '#2a2a2a'
+            : '#ffffff'
+        canvas.style.background = bg
         const pdfPage = await doc.getPage(pageNum)
         const viewport = pdfPage.getViewport({ scale: renderScale })
         // Apply device pixel ratio for crisp text
@@ -102,12 +117,6 @@ export function PdfReader({ book, onProgress }: Props) {
         } as any)
         renderTaskRef.current = renderTask
         await renderTask.promise
-        // Apply theme to canvas background
-        const bg =
-          settings.theme === 'dark' || settings.theme === 'contrast'
-            ? '#2a2a2a'
-            : '#ffffff'
-        canvas.style.background = bg
       } catch (e) {
         if ((e as { name?: string })?.name === 'RenderingCancelledException') return
         console.error('PDF render failed', e)

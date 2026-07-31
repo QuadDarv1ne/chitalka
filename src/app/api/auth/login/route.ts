@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { verifyPassword, createSession, getSessionCookieName, getSessionDuration, getClientIp, getUserAgent, isCookieSecure } from '@/lib/auth'
 import { applyRateLimit } from '@/lib/rate-limit'
+import { readJsonBody } from '@/lib/http'
 import { cookies } from 'next/headers'
 
 export async function POST(req: Request) {
@@ -20,15 +21,17 @@ export async function POST(req: Request) {
       )
     }
 
-    const body = await req.json()
+    const body = await readJsonBody<{ email?: unknown; password?: unknown; rememberMe?: unknown }>(req)
     const { email, password, rememberMe } = body ?? {}
 
-    if (!email || !password) {
+    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
       return NextResponse.json(
         { error: 'Email и пароль обязательны' },
         { status: 400 },
       )
     }
+
+    const remember = rememberMe === true
 
     const normalizedEmail = email.toLowerCase().trim()
     const user = await db.user.findUnique({
@@ -46,10 +49,13 @@ export async function POST(req: Request) {
       )
     }
 
+    // Prune expired sessions (unbounded table growth guard)
+    db.session.deleteMany({ where: { expiresAt: { lt: new Date() } } }).catch(() => {})
+
     const { token } = await createSession(
       { userId: user.id, email: user.email, name: user.name },
       {
-        rememberMe: !!rememberMe,
+        rememberMe: remember,
         userAgent: getUserAgent(req),
         ip: getClientIp(req),
       },
@@ -61,7 +67,7 @@ export async function POST(req: Request) {
       secure: isCookieSecure(),
       sameSite: 'lax',
       path: '/',
-      maxAge: getSessionDuration(rememberMe),
+      maxAge: getSessionDuration(remember),
     })
 
     return NextResponse.json({

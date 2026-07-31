@@ -1,10 +1,37 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getCurrentUser, getSessionPayload } from '@/lib/session'
-import { verifyPassword, hashPassword, revokeAllSessionsExcept } from '@/lib/auth'
+import { getCurrentUser } from '@/lib/session'
+import {
+  verifyPassword,
+  hashPassword,
+  createSession,
+  revokeAllSessions,
+  getSessionCookieName,
+  getSessionDuration,
+  getClientIp,
+  getUserAgent,
+  isCookieSecure,
+} from '@/lib/auth'
+import { applyRateLimit } from '@/lib/rate-limit'
+import { readJsonBody } from '@/lib/http'
+import { cookies } from 'next/headers'
 
 export async function POST(req: Request) {
   try {
+    // Rate limit: brute-force guard for the password-verifying endpoint
+    const rl = applyRateLimit(req, 'login')
+    if (!rl.ok) {
+      return NextResponse.json(
+        {
+          error: `Слишком много попыток. Попробуйте через ${Math.ceil(rl.retryAfter / 60000)} мин`,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(Math.ceil(rl.retryAfter / 1000)) },
+        },
+      )
+    }
+
     const user = await getCurrentUser()
     if (!user) {
       return NextResponse.json(
@@ -13,10 +40,10 @@ export async function POST(req: Request) {
       )
     }
 
-    const body = await req.json().catch(() => ({}))
+    const body = await readJsonBody<{ currentPassword?: unknown; newPassword?: unknown }>(req)
     const { currentPassword, newPassword } = body ?? {}
 
-    if (!currentPassword || !newPassword) {
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || !currentPassword || !newPassword) {
       return NextResponse.json(
         { error: 'Текущий и новый пароль обязательны' },
         { status: 400 },
@@ -55,11 +82,24 @@ export async function POST(req: Request) {
       data: { passwordHash: newHash },
     })
 
-    // Revoke all other sessions — the password may have been compromised
-    const currentSession = await getSessionPayload()
-    if (currentSession?.sessionId) {
-      await revokeAllSessionsExcept(user.id, currentSession.sessionId)
-    }
+    // Revoke every session (incl. current) and issue a fresh one —
+    // the old cookie must not survive a password change.
+    await revokeAllSessions(user.id)
+    const { token } = await createSession(
+      { userId: user.id, email: user.email, name: user.name },
+      {
+        userAgent: getUserAgent(req),
+        ip: getClientIp(req),
+      },
+    )
+    const cookieStore = await cookies()
+    cookieStore.set(getSessionCookieName(), token, {
+      httpOnly: true,
+      secure: isCookieSecure(),
+      sameSite: 'lax',
+      path: '/',
+      maxAge: getSessionDuration(false),
+    })
 
     return NextResponse.json({ ok: true })
   } catch (e) {

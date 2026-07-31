@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
 import { PAGE_WORDS } from '@/lib/constants'
+import { decodeTextBlob } from '@/lib/text-encoding'
 import {
   useReaderStore,
   fontFamilyCss,
@@ -55,8 +56,7 @@ export function TxtReader({ book, onProgress }: Props) {
     let cancelled = false
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
-    book.blob
-      .text()
+    decodeTextBlob(book.blob)
       .then((text) => {
         if (cancelled) return
         setContent(text)
@@ -106,6 +106,16 @@ export function TxtReader({ book, onProgress }: Props) {
   }, [content])
 
   const totalPages = pages.length
+
+  // Clamp the restored page once the book is paginated (content may load
+  // with a stale position that exceeds the page count)
+  useEffect(() => {
+    if (totalPages > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPage((p) => Math.max(0, Math.min(p, totalPages - 1)))
+    }
+  }, [totalPages])
+
   const currentPage = pages[page] || ''
   const progress = totalPages > 0 ? (page + 1) / totalPages : 0
 
@@ -131,17 +141,19 @@ export function TxtReader({ book, onProgress }: Props) {
   }, [page, totalPages, progress, onProgress])
 
   const prev = useCallback(() => {
-    setPage((p) => Math.max(0, p - 1))
+    if (page <= 0) return
+    setPage(page - 1)
     setPagesFlipped((n) => n + 1)
     containerRef.current?.scrollTo({ top: 0 })
     tts.stop()
-  }, [tts])
+  }, [page, tts])
   const next = useCallback(() => {
-    setPage((p) => Math.min(totalPages - 1, p + 1))
+    if (totalPages === 0 || page >= totalPages - 1) return
+    setPage(page + 1)
     setPagesFlipped((n) => n + 1)
     containerRef.current?.scrollTo({ top: 0 })
     tts.stop()
-  }, [totalPages, tts])
+  }, [page, totalPages, tts])
 
   // Keyboard nav
   useEffect(() => {
@@ -390,7 +402,11 @@ export function TxtReader({ book, onProgress }: Props) {
       {selection && (
         <div
           className="fixed z-50 -translate-x-1/2 -translate-y-full"
-          style={{ left: selection.x, top: selection.y }}
+          style={{
+            left: selection.x,
+            // Keep the toolbar on screen when the selection is near the top
+            top: Math.max(selection.y, 56),
+          }}
         >
           <ColorPicker onPick={handleHighlight} />
         </div>

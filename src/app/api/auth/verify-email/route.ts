@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createSession, getSessionCookieName, getSessionDuration, isCookieSecure } from '@/lib/auth'
 import { applyRateLimit, cleanupRateLimits } from '@/lib/rate-limit'
+import { readJsonBody } from '@/lib/http'
 import { cookies } from 'next/headers'
 
 export async function POST(req: Request) {
@@ -15,12 +16,25 @@ export async function POST(req: Request) {
     }
     cleanupRateLimits()
 
-    const body = await req.json().catch(() => ({}))
+    const body = await readJsonBody<{ token?: unknown }>(req)
     const { token } = body ?? {}
 
-    if (!token) {
+    if (typeof token !== 'string' || !token) {
       return NextResponse.json(
         { error: 'Token обязателен' },
+        { status: 400 },
+      )
+    }
+
+    // Atomically claim the token — a concurrent request with the same token
+    // will see count === 0 and fail instead of using the token twice.
+    const claimed = await db.emailVerification.updateMany({
+      where: { token, usedAt: null, expiresAt: { gt: new Date() } },
+      data: { usedAt: new Date() },
+    })
+    if (claimed.count !== 1) {
+      return NextResponse.json(
+        { error: 'Ссылка недействительна или устарела' },
         { status: 400 },
       )
     }
@@ -29,24 +43,17 @@ export async function POST(req: Request) {
       where: { token },
       include: { user: true },
     })
-
-    if (!verification || verification.usedAt || verification.expiresAt < new Date()) {
+    if (!verification || !verification.user) {
       return NextResponse.json(
         { error: 'Ссылка недействительна или устарела' },
         { status: 400 },
       )
     }
 
-    const [updatedUser] = await Promise.all([
-      db.user.update({
-        where: { id: verification.userId },
-        data: { emailVerified: new Date() },
-      }),
-      db.emailVerification.update({
-        where: { id: verification.id },
-        data: { usedAt: new Date() },
-      }),
-    ])
+    const updatedUser = await db.user.update({
+      where: { id: verification.userId },
+      data: { emailVerified: new Date() },
+    })
 
     // Auto-login user after verification
     const { token: sessionToken } = await createSession({

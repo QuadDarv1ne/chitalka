@@ -14,7 +14,7 @@ import {
   Flame,
   Target,
 } from 'lucide-react'
-import { useReaderStore } from '@/store/reader-store'
+import { useReaderStore, localDateString } from '@/store/reader-store'
 import { getAllBooks, type BookRecord } from '@/lib/library'
 import { UserMenu } from '@/components/auth/user-menu'
 import { useAuth } from '@/hooks/use-auth'
@@ -40,11 +40,19 @@ export function Stats() {
   const [books, setBooks] = useState<BookRecord[]>([])
 
   useEffect(() => {
-    getAllBooks(userId).then(setBooks)
+    let cancelled = false
+    getAllBooks(userId)
+      .then((b) => {
+        if (!cancelled) setBooks(b)
+      })
+      .catch((e) => console.error(e))
+    return () => {
+      cancelled = true
+    }
   }, [userId])
 
-  // Today's reading time
-  const todayDate = new Date().toISOString().slice(0, 10)
+  // Today's reading time (local calendar day — matches how sessions are stored)
+  const todayDate = localDateString(new Date())
   const todayMinutes = useMemo(
     () =>
       sessions
@@ -61,7 +69,7 @@ export function Stats() {
     for (let i = 13; i >= 0; i--) {
       const d = new Date(today)
       d.setDate(d.getDate() - i)
-      const dateStr = d.toISOString().slice(0, 10)
+      const dateStr = localDateString(d)
       const daySessions = sessions.filter((s) => s.date === dateStr)
       days.push({
         date: dateStr,
@@ -85,7 +93,7 @@ export function Stats() {
     for (let i = 0; i < 365; i++) {
       const d = new Date(today)
       d.setDate(d.getDate() - i)
-      const dateStr = d.toISOString().slice(0, 10)
+      const dateStr = localDateString(d)
       const has = sessions.some((s) => s.date === dateStr)
       if (has) count++
       else if (i === 0) continue

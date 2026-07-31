@@ -73,21 +73,38 @@ export async function getBook(id: string) {
  */
 export async function getAllBooks(userId?: string | null) {
   const db = await getDB()
-  const all = await db.getAll('books')
-  const filtered = userId === undefined
-    ? all
-    : all.filter((b) => (b.userId ?? null) === userId)
-  return filtered.sort((a, b) => (b.lastOpenedAt ?? b.addedAt) - (a.lastOpenedAt ?? a.addedAt))
+  let all: BookRecord[]
+  if (typeof userId === 'string') {
+    all = await db.getAllFromIndex('books', 'by-userId', userId)
+  } else if (userId === null) {
+    all = await db.getAll('books')
+    all = all.filter((b) => (b.userId ?? null) === null)
+  } else {
+    all = await db.getAll('books')
+  }
+  return all.sort((a, b) => (b.lastOpenedAt ?? b.addedAt) - (a.lastOpenedAt ?? a.addedAt))
 }
 
 export async function deleteBook(id: string) {
-  const db = await getDB()
-  await db.delete('books', id)
+  // Route through the same per-id queue as updateBook, otherwise a queued
+  // update that lands after the delete would resurrect the record.
+  const prev = writeQueues.get(id) ?? Promise.resolve()
+  const next = prev.then(async () => {
+    const db = await getDB()
+    await db.delete('books', id)
+  })
+  writeQueues.set(id, next.catch(() => {}))
+  return next
 }
 
 // Serialize read-modify-write per book: page turns fire many unawaited
 // updateBook calls, and interleaved reads could persist a stale patch last.
 const writeQueues = new Map<string, Promise<void>>()
+
+/** Await all pending writes for a book (used before reading/uploading). */
+export async function flushBookWrites(id: string): Promise<void> {
+  await writeQueues.get(id)
+}
 
 export async function updateBook(
   id: string,

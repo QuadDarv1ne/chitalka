@@ -23,6 +23,8 @@ export function useReadingTracker(bookId: string, pagesFlipped: number) {
 
   // Start timer
   useEffect(() => {
+    // Reset per book — TxtReader stays mounted across book switches, and
+    // without this the elapsed time would be attributed to the first book.
     startTimeRef.current = Date.now()
     lastFlushRef.current = Date.now()
     pagesRef.current = 0
@@ -46,5 +48,5 @@ export function useReadingTracker(bookId: string, pagesFlipped: number) {
       // Final flush — captures sub-minute sessions and page counts
       flush(Date.now(), true)
     }
-  }, [logReading])
+  }, [logReading, bookId])
 }

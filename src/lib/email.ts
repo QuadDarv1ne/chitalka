@@ -47,6 +47,11 @@ const MAX_STORED_EMAILS = 100
 export async function sendEmail(
   message: EmailMessage,
 ): Promise<SentEmail> {
+  if (process.env.NODE_ENV === 'production' && !process.env.RESEND_API_KEY) {
+    throw new Error(
+      'Email delivery is not configured. Set RESEND_API_KEY or implement an SMTP provider in src/lib/email.ts',
+    )
+  }
   const id = Math.random().toString(36).slice(2, 12)
   const sent: SentEmail = {
     ...message,
@@ -61,7 +66,7 @@ export async function sendEmail(
     sentEmails.splice(0, sentEmails.length - MAX_STORED_EMAILS)
   }
 
-  // Log to console (visible in dev.log)
+  // Log to console (visible in dev.log) — dev only, no token leakage in prod
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log(`📧 EMAIL SENT (dev mode)`)
   console.log(`To: ${message.to}`)

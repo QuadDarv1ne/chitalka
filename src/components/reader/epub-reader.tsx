@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
 import { useReaderStore, fontFamilyCss, themeBg, themeFg } from '@/store/reader-store'
+import { useReadingTracker } from '@/hooks/use-reading-tracker'
 
 interface Props {
   book: BookRecord
@@ -20,7 +21,11 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
   const [ready, setReady] = useState(false)
   const [hasPrev, setHasPrev] = useState(false)
   const [hasNext, setHasNext] = useState(false)
+  const [relocations, setRelocations] = useState(0)
   const settings = useReaderStore((s) => s.settings)
+
+  // Reading time tracking (page turns / relocations)
+  useReadingTracker(book.id, relocations)
 
   useEffect(() => {
     onProgressRef.current = onProgress
@@ -73,10 +78,17 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       try {
         await epubBook.ready
         if (disposed) return
-        // Restore CFI if available
-        if (book.cfi) {
-          await rendition.display(book.cfi)
-        } else {
+        // Restore CFI if available — a stale/invalid CFI (book file replaced,
+        // bookmark from another edition) must not leave the reader stuck.
+        try {
+          if (book.cfi) {
+            await rendition.display(book.cfi)
+          } else {
+            await rendition.display()
+          }
+        } catch {
+          if (disposed) return
+          console.warn('EPUB: CFI invalid, opening from the start')
           await rendition.display()
         }
         if (disposed) return
@@ -95,6 +107,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       const percent = location.start.percentage || 0
       // Persist CFI on book record
       onProgressRef.current(percent, { cfi })
+      setRelocations((n) => n + 1)
       updateNavButtons()
     }
     rendition.on('relocated', onLocated)
@@ -115,13 +128,17 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
     const onGoto = (e: Event) => {
       const href = (e as CustomEvent<string>).detail
       if (href && renditionRef.current) {
-        renditionRef.current.display(href)
+        renditionRef.current.display(href).catch(() => {
+          console.warn('EPUB: failed to navigate to', href)
+        })
       }
     }
     const onGotoCfi = (e: Event) => {
       const cfi = (e as CustomEvent<string>).detail
       if (cfi && renditionRef.current) {
-        renditionRef.current.display(cfi)
+        renditionRef.current.display(cfi).catch(() => {
+          console.warn('EPUB: failed to navigate to CFI', cfi)
+        })
       }
     }
     const onGotoSpine = (e: Event) => {
@@ -130,7 +147,9 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
         const spine = bookRef.current.spine
         const item = spine.get(idx)
         if (item && renditionRef.current) {
-          renditionRef.current.display(item.href)
+          renditionRef.current.display(item.href).catch(() => {
+            console.warn('EPUB: failed to navigate to spine item', idx)
+          })
         }
       }
     }

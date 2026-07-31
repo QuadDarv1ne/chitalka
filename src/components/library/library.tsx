@@ -136,63 +136,95 @@ export function Library() {
       const list = Array.from(files)
       let imported = 0
       let skipped = 0
-      for (const file of list) {
-        if (file.size > MAX_FILE_SIZE) {
-          toast.error(`Файл слишком большой (макс. ${Math.round(MAX_FILE_SIZE / 1024 / 1024)} МБ): ${file.name}`)
-          continue
-        }
-        const format = detectFormat(file.name)
-        if (!format) {
-          toast.error(`Формат не поддерживается: ${file.name}`)
-          continue
-        }
-        try {
-          let meta
-          let blob: Blob = file
-          if (format === 'epub') {
-            meta = await parseEpubMeta(file)
-          } else if (format === 'pdf') {
-            meta = await parsePdfMeta(file)
-          } else if (format === 'fb2') {
-            meta = await parseFb2Meta(file)
-            // Convert FB2 to text and store as text blob for TxtReader
-            const textContent = await parseFb2Content(file)
-            if (textContent) {
-              blob = new Blob([textContent], { type: 'text/plain' })
+      let failed = 0
+      try {
+        // Fetch existing books once so the loop below doesn't hit IndexedDB per file
+        const existing = await getAllBooks(userId)
+        // Dedupe by a short hash of the file head (cheap, avoids title+size collisions)
+        const existingHashes = new Set(
+          await Promise.all(existing.map(async (b) => {
+            try {
+              return await hashFileHead(b.blob)
+            } catch {
+              return `${b.title}\u0000${b.size}`
             }
-          } else {
-            meta = await parseTextMeta(file, format)
+          })),
+        )
+        // Import files with bounded concurrency (3 at a time)
+        const queue = [...list]
+        const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
+          while (queue.length > 0) {
+            const file = queue.shift()!
+            if (file.size > MAX_FILE_SIZE) {
+              toast.error(`Файл слишком большой (макс. ${Math.round(MAX_FILE_SIZE / 1024 / 1024)} МБ): ${file.name}`)
+              failed++
+              continue
+            }
+            const format = detectFormat(file.name)
+            if (!format) {
+              toast.error(`Формат не поддерживается: ${file.name}`)
+              failed++
+              continue
+            }
+            try {
+              const headHash = await hashFileHead(file)
+              if (existingHashes.has(headHash)) {
+                skipped++
+                continue
+              }
+              let meta
+              let blob: Blob = file
+              if (format === 'epub') {
+                meta = await parseEpubMeta(file)
+              } else if (format === 'pdf') {
+                meta = await parsePdfMeta(file)
+              } else if (format === 'fb2') {
+                meta = await parseFb2Meta(file)
+                // Convert FB2 to text and store as text blob for TxtReader
+                const textContent = await parseFb2Content(file)
+                if (!textContent) {
+                  toast.error(`Не удалось извлечь текст: ${file.name}`)
+                  failed++
+                  continue
+                }
+                blob = new Blob([textContent], { type: 'text/plain' })
+              } else {
+                meta = await parseTextMeta(file, format)
+              }
+              const book: BookRecord = {
+                id: crypto.randomUUID(),
+                title: meta.title,
+                author: meta.author,
+                format,
+                size: file.size,
+                cover: meta.cover,
+                description: meta.description,
+                blob,
+                addedAt: Date.now(),
+                userId,
+              }
+              await saveBook(book)
+              existingHashes.add(headHash)
+              imported++
+            } catch (e) {
+              console.error(e)
+              toast.error(`Ошибка импорта: ${file.name}`)
+              failed++
+            }
           }
-          // Skip duplicates already in the library (same title + size)
-          const existing = await getAllBooks(userId)
-          if (existing.some((b) => b.title === meta.title && b.size === file.size)) {
-            skipped++
-            continue
-          }
-          const book: BookRecord = {
-            id: crypto.randomUUID(),
-            title: meta.title,
-            author: meta.author,
-            format,
-            size: file.size,
-            cover: meta.cover,
-            description: meta.description,
-            blob,
-            addedAt: Date.now(),
-            userId,
-          }
-          await saveBook(book)
-          imported++
-        } catch (e) {
-          console.error(e)
-          toast.error(`Ошибка импорта: ${file.name}`)
-        }
+        })
+        await Promise.all(workers)
+      } catch (e) {
+        console.error(e)
+        toast.error('Ошибка при чтении библиотеки')
       }
       if (imported > 0) {
         toast.success(`Импортировано книг: ${imported}`)
         await refresh()
       } else if (skipped > 0) {
         toast.info(`Пропущено дубликатов: ${skipped}`)
+      } else if (failed > 0) {
+        toast.error('Ничего не импортировано')
       }
     },
     [refresh, userId],
@@ -748,3 +780,12 @@ const ThemeSwitcher = memo(function ThemeSwitcher({ value, onChange }: { value: 
     </DropdownMenu>
   )
 })
+
+async function hashFileHead(source: Blob): Promise<string> {
+  const head = await source.slice(0, 64 * 1024).arrayBuffer()
+  const digest = await crypto.subtle.digest('SHA-256', head)
+  const bytes = new Uint8Array(digest)
+  let hex = ''
+  for (const b of bytes) hex += b.toString(16).padStart(2, '0')
+  return hex
+}
