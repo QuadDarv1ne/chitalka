@@ -1,24 +1,15 @@
-# Amvera Cloud deployment — https://docs.amvera.ru/
-# The `environment: docker` signature builds the Dockerfile in the repo root.
-# Runtime settings required in the dashboard (Разделы «Переменные и секреты»):
-#   JWT_SECRET           — openssl rand -hex 32
-#   NEXT_PUBLIC_APP_URL  — e.g. https://chitalka.<user>.amvera.io
-# Settings are referenced here with the ${NAME} syntax.
-
+---
 meta:
   environment: docker
   toolchain:
     name: docker
-    version: "latest"
-
+    version: latest
+build:
+  dockerfile: Dockerfile
+  skip: false
 run:
-  containerPort: 3000
+  image: null
+  command: null
+  args: null
   persistenceMount: /data
-
-env:
-  HOSTNAME: 0.0.0.0
-  PORT: 3000
-  DATABASE_URL: file:/data/chitalka.db
-  TRUST_PROXY: "true"
-  JWT_SECRET: ${JWT_SECRET}
-  NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+  containerPort: 3000
