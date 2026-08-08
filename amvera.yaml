@@ -13,3 +13,10 @@ run:
   args: null
   persistenceMount: /data
   containerPort: 3000
+env:
+  HOSTNAME: 0.0.0.0
+  PORT: 3000
+  DATABASE_URL: file:/data/chitalka.db
+  TRUST_PROXY: "true"
+  JWT_SECRET: ${JWT_SECRET}
+  NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
