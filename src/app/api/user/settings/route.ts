@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/session'
+import { readJsonBody } from '@/lib/http'
 
 const VALID_THEMES = ['light', 'dark', 'sepia', 'contrast']
 const VALID_FONTS = ['serif', 'sans', 'mono']
@@ -65,7 +66,10 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
     }
 
-    const body = await req.json().catch(() => ({}))
+    const body = await readJsonBody<{
+      theme?: unknown, fontFamily?: unknown, fontSize?: unknown, lineHeight?: unknown, margin?: unknown,
+      textAlign?: unknown, hyphens?: unknown, ttsRate?: unknown, ttsVoice?: unknown, dailyGoalMinutes?: unknown,
+    }>(req, 64 * 1024)
     const {
       theme, fontFamily, fontSize, lineHeight, margin,
       textAlign, hyphens, ttsRate, ttsVoice, dailyGoalMinutes,
@@ -74,13 +78,13 @@ export async function PUT(req: Request) {
     // Validate
     const data: Record<string, unknown> = {}
     if (theme !== undefined) {
-      if (!VALID_THEMES.includes(theme)) {
+      if (typeof theme !== 'string' || !VALID_THEMES.includes(theme)) {
         return NextResponse.json({ error: 'Некорректная тема' }, { status: 400 })
       }
       data.theme = theme
     }
     if (fontFamily !== undefined) {
-      if (!VALID_FONTS.includes(fontFamily)) {
+      if (typeof fontFamily !== 'string' || !VALID_FONTS.includes(fontFamily)) {
         return NextResponse.json({ error: 'Некорректный шрифт' }, { status: 400 })
       }
       data.fontFamily = fontFamily
@@ -107,7 +111,7 @@ export async function PUT(req: Request) {
       data.margin = n
     }
     if (textAlign !== undefined) {
-      if (!VALID_ALIGN.includes(textAlign)) {
+      if (typeof textAlign !== 'string' || !VALID_ALIGN.includes(textAlign)) {
         return NextResponse.json({ error: 'Выравнивание: left/justify' }, { status: 400 })
       }
       data.textAlign = textAlign

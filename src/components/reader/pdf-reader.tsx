@@ -23,11 +23,13 @@ export function PdfReader({ book, onProgress }: Props) {
   const onProgressRef = useRef(onProgress)
   const [totalPages, setTotalPages] = useState(0)
   const [page, setPage] = useState(book.pdfPage ?? 1)
+  const [pagesFlipped, setPagesFlipped] = useState(0)
   const [loading, setLoading] = useState(true)
   const [pageLoading, setPageLoading] = useState(false)
   const [scale, setScale] = useState(1.2)
   const [pageInput, setPageInput] = useState(String(page))
   const bookIdRef = useRef(book.id)
+  const prevPageRef = useRef(book.pdfPage ?? 1)
 
   // Sync state when book changes
   if (book.id !== bookIdRef.current) {
@@ -37,13 +39,24 @@ export function PdfReader({ book, onProgress }: Props) {
     setScale(1.2)
     setTotalPages(0)
     setLoading(true)
+    setPagesFlipped(0)
+    prevPageRef.current = book.pdfPage ?? 1
   }
   const settings = useReaderStore((s) => s.settings)
 
   onProgressRef.current = onProgress
 
+  // Count only actual page turns, so the current page number is not logged
+  // as "pages read" (a reader on page 300 would otherwise log 300 pages/5s)
+  useEffect(() => {
+    if (prevPageRef.current !== page) {
+      prevPageRef.current = page
+      setPagesFlipped((n) => n + 1)
+    }
+  }, [page])
+
   // Reading time tracking (pages visited)
-  useReadingTracker(book.id, page)
+  useReadingTracker(book.id, pagesFlipped)
 
   // Load PDF document
   useEffect(() => {

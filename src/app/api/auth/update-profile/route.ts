@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/session'
+import { readJsonBody } from '@/lib/http'
 
 export async function PATCH(req: Request) {
   try {
@@ -12,7 +13,7 @@ export async function PATCH(req: Request) {
       )
     }
 
-    const body = await req.json().catch(() => ({}))
+    const body = await readJsonBody<{ name?: unknown }>(req, 16 * 1024)
     const { name } = body ?? {}
 
     if (typeof name !== 'string' && name !== null) {

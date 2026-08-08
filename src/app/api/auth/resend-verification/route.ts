@@ -4,8 +4,18 @@ import { generateResetToken } from '@/lib/auth'
 import { sendEmail } from '@/lib/email'
 import { applyRateLimit } from '@/lib/rate-limit'
 import { getAppBaseUrl } from '@/lib/url'
+import { readJsonBody } from '@/lib/http'
 
 const VERIFY_DURATION_MS = 60 * 60 * 24 * 7 // 7 days
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
 export async function POST(req: Request) {
   try {
@@ -21,10 +31,10 @@ export async function POST(req: Request) {
       )
     }
 
-    const body = await req.json().catch(() => ({}))
+    const body = await readJsonBody<{ email?: unknown }>(req, 16 * 1024)
     const { email } = body ?? {}
 
-    if (!email) {
+    if (typeof email !== 'string' || !email) {
       return NextResponse.json(
         { error: 'Email обязателен' },
         { status: 400 },
@@ -54,11 +64,12 @@ export async function POST(req: Request) {
 
     const verifyLink = `${getAppBaseUrl(req)}/?verify=${token}`
 
+    const escapedName = escapeHtml(user.name || '')
     const html = `
       <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
         <h2 style="color: #1c1c1c;">Подтверждение email</h2>
         <p style="color: #555; line-height: 1.6;">
-          Здравствуйте${user.name ? `, ${user.name}` : ''}!
+          Здравствуйте${escapedName ? `, ${escapedName}` : ''}!
         </p>
         <p style="color: #555; line-height: 1.6;">
           Пожалуйста, подтвердите ваш email для аккаунта в Читалке.

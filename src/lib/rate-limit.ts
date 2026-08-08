@@ -98,8 +98,10 @@ export function getRateLimitKey(req: Request, endpoint: string): string {
       const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean)
       ip = parts[parts.length - 1] ?? ''
     }
+    // X-Real-IP is equally forgeable by a direct client, so it is only
+    // trusted when the app is known to sit behind a stripping proxy.
+    if (!ip) ip = req.headers.get('x-real-ip') ?? ''
   }
-  if (!ip) ip = req.headers.get('x-real-ip') ?? ''
   // No real IP available — key by UA+endpoint to at least slow down scripts
   if (!ip || ip.length > 64) {
     const ua = trustProxy ? '' : (req.headers.get('user-agent') ?? '').slice(0, 64)

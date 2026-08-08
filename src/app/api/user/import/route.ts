@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/session'
+import { readJsonBody } from '@/lib/http'
 
 const VALID_FORMATS = ['epub', 'fb2', 'pdf', 'txt', 'md', 'html']
 const VALID_THEMES = ['light', 'dark', 'sepia', 'contrast']
@@ -24,8 +25,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
     }
 
-    const body = await req.json().catch(() => ({}))
-    const { backup } = body ?? {}
+    const body = await readJsonBody<{ backup?: unknown }>(req, 20 * 1024 * 1024)
+    const backup = (body?.backup ?? null) as Record<string, unknown> | null
 
     if (!backup || !backup.version) {
       return NextResponse.json(
@@ -79,14 +80,14 @@ export async function POST(req: Request) {
 
     // Restore settings if provided
     if (backup.settings && typeof backup.settings === 'object') {
-      const s = backup.settings
+      const s = backup.settings as Record<string, unknown>
       const settingsData: Record<string, unknown> = {}
-      if (VALID_THEMES.includes(s.theme)) settingsData.theme = s.theme
-      if (VALID_FONTS.includes(s.fontFamily)) settingsData.fontFamily = s.fontFamily
+      if (typeof s.theme === 'string' && VALID_THEMES.includes(s.theme)) settingsData.theme = s.theme
+      if (typeof s.fontFamily === 'string' && VALID_FONTS.includes(s.fontFamily)) settingsData.fontFamily = s.fontFamily
       if (Number.isFinite(Number(s.fontSize))) settingsData.fontSize = clampNumber(s.fontSize, 12, 28, 18)
       if (Number.isFinite(Number(s.lineHeight))) settingsData.lineHeight = clampNumber(s.lineHeight, 1.2, 2.4, 1.7)
       if (Number.isFinite(Number(s.margin))) settingsData.margin = clampNumber(s.margin, 1, 6, 3)
-      if (VALID_ALIGN.includes(s.textAlign)) settingsData.textAlign = s.textAlign
+      if (typeof s.textAlign === 'string' && VALID_ALIGN.includes(s.textAlign)) settingsData.textAlign = s.textAlign
       if (typeof s.hyphens === 'boolean') settingsData.hyphens = s.hyphens
       if (Number.isFinite(Number(s.ttsRate))) settingsData.ttsRate = clampNumber(s.ttsRate, 0.5, 2, 1)
       if (s.ttsVoice === null || typeof s.ttsVoice === 'string') settingsData.ttsVoice = s.ttsVoice

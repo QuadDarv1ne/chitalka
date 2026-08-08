@@ -131,12 +131,20 @@ ${verifyLink}
 
 Ссылка действительна 7 дней.`
 
-    const sent = await sendEmail({
-      to: normalizedEmail,
-      subject: 'Добро пожаловать! Подтвердите email — Читалка',
-      html,
-      text,
-    })
+    // A failed welcome email must not break registration — the account exists
+    // and the user can resend the verification link later.
+    let previewUrl: string | undefined
+    try {
+      const sent = await sendEmail({
+        to: normalizedEmail,
+        subject: 'Добро пожаловать! Подтвердите email — Читалка',
+        html,
+        text,
+      })
+      previewUrl = sent.previewUrl
+    } catch (e) {
+      console.warn('Failed to send welcome email', e)
+    }
 
     const { token } = await createSession(
       { userId: user.id, email: user.email, name: user.name },
@@ -164,7 +172,7 @@ ${verifyLink}
         emailVerified: null,
       },
       ...(process.env.NODE_ENV !== 'production'
-        ? { _devVerifyLink: sent.previewUrl || verifyLink }
+        ? { _devVerifyLink: previewUrl || verifyLink }
         : {}),
     })
   } catch (e) {

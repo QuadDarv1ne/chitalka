@@ -80,6 +80,24 @@ bun run build
 bun run start
 ```
 
+## Развертывание на Amvera Cloud
+
+Проект готов к деплою на [Amvera](https://amvera.ru/) (`amvera.yaml` + `Dockerfile`,
+сборка через Docker, Next.js standalone). База данных SQLite хранится в постоянном
+хранилище `/data`, поэтому аккаунты и прогресс переживают пересборки.
+
+1. Создайте проект в Amvera и подключите этот репозиторий (GitHub) или запушьте
+   его в `https://git.amvera.ru/<user>/<project>.git`.
+2. В разделе «Настройки» добавьте бесплатное доменное имя:
+   `https://<project>.<user>.amvera.io`.
+3. В разделе «Переменные и секреты» задайте:
+   - `JWT_SECRET` — `openssl rand -hex 32`
+   - `NEXT_PUBLIC_APP_URL` — `https://<project>.<user>.amvera.io`
+4. Запустите сборку. Приложение слушает порт 3000, на старте автоматически
+   применяет схему Prisma (`prisma db push`) к `file:/data/chitalka.db`.
+5. Письма в production отдаются мок-сервисом — для реальной доставки задайте
+   `RESEND_API_KEY` и реализуйте SMTP в `src/lib/email.ts`.
+
 ## Переменные окружения
 
 Создайте `.env` файл:

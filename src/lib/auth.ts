@@ -175,9 +175,11 @@ export function getClientIp(req: Request): string | undefined {
       const ip = parts[parts.length - 1]
       if (ip && ip.length <= 64) return ip
     }
+    // Only trusted behind a proxy as well — a direct client can freely
+    // forge this header.
+    const real = req.headers.get('x-real-ip')
+    if (real && real.length <= 64) return real
   }
-  const real = req.headers.get('x-real-ip')
-  if (real && real.length <= 64) return real
   return undefined
 }
 

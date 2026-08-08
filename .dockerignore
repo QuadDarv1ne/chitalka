@@ -1,0 +1,42 @@
+# Git metadata
+.git
+.gitignore
+
+# IDE / tools
+.vscode
+.idea
+.mimocode
+
+# Dependencies
+node_modules
+
+# Next.js build output
+.next
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+dev.log
+server.log
+
+# Local data
+download
+data
+*.db
+*.db-wal
+*.db-shm
+
+# Docker (no need in build context)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Misc local files
+Caddyfile
+LICENCE
+README.md
+dev.log

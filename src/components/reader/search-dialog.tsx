@@ -41,6 +41,8 @@ export function SearchDialog({ book }: Props) {
   const [searched, setSearched] = useState(false)
   const [textContent, setTextContent] = useState<string>('')
   const [textLoaded, setTextLoaded] = useState(false)
+  // Search is text-format-only for the button gating (PDF/EPUB search works without preprocessing)
+  const needsText = book.format === 'txt' || book.format === 'md' || book.format === 'fb2'
   // Monotonic counter: stale (out-of-order) search results are discarded
   const searchSeqRef = useRef(0)
   const openRef = useRef(open)
@@ -70,7 +72,7 @@ export function SearchDialog({ book }: Props) {
       setSearched(false)
       return
     }
-    if (!textLoaded && (book.format === 'txt' || book.format === 'md' || book.format === 'fb2')) {
+    if (!textLoaded && needsText) {
       return
     }
     const seq = ++searchSeqRef.current
@@ -250,7 +252,10 @@ export function SearchDialog({ book }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <Button type="submit" disabled={loading || !query.trim() || !textLoaded}>
+          <Button
+            type="submit"
+            disabled={loading || !query.trim() || (needsText && !textLoaded)}
+          >
             Найти
           </Button>
         </form>

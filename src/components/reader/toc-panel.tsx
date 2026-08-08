@@ -6,6 +6,7 @@ import { BookOpen, FileText } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
 import { Button } from '@/components/ui/button'
 import { initPdfWorker } from '@/lib/pdf-worker'
+import { decodeTextBlob } from '@/lib/text-encoding'
 
 interface TocItem {
   id: string
@@ -123,7 +124,9 @@ export function TocPanel({ book, onNavigate }: Props) {
       } else {
         // For text/markdown/fb2, generate TOC from headings
         try {
-          const text = await book.blob.text()
+          // decodeTextBlob honors BOMs and falls back to cp1251 — blob.text()
+          // always assumes UTF-8 and produces mojibake for Russian FB2/TXT
+          const text = await decodeTextBlob(book.blob)
           const lines = text.split('\n')
           const items: TocItem[] = []
           for (const line of lines) {

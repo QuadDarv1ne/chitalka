@@ -9,6 +9,15 @@ import { readJsonBody } from '@/lib/http'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const RESET_DURATION_MS = 60 * 60 * 1000 // 1 hour
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export async function POST(req: Request) {
   try {
     // Rate limit: 5 requests per hour
@@ -64,11 +73,12 @@ export async function POST(req: Request) {
 
       resetLink = `${getAppBaseUrl(req)}/?reset=${token}`
 
+      const escapedName = escapeHtml(user.name || '')
       const html = `
         <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
           <h2 style="color: #1c1c1c;">Восстановление пароля</h2>
           <p style="color: #555; line-height: 1.6;">
-            Здравствуйте${user.name ? `, ${user.name}` : ''}!
+            Здравствуйте${escapedName ? `, ${escapedName}` : ''}!
           </p>
           <p style="color: #555; line-height: 1.6;">
             Мы получили запрос на сброс пароля для вашего аккаунта в Читалке.

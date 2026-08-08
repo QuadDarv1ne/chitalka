@@ -4,6 +4,9 @@
 # IMPORTANT: the app sets Secure cookies in production. If you serve plain
 # HTTP on a LAN, set COOKIE_SECURE=false in the app's .env instead of using
 # this plain-HTTP site. Prefer TLS below (self-signed works on LANs).
+# Also set TRUST_PROXY=true in the app's .env — this config overwrites the
+# incoming X-Forwarded-For / X-Real-IP with the real client address, so the
+# app can rate-limit per IP without trusting client-supplied headers.
 :81 {
 	encode zstd gzip
 

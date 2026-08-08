@@ -285,8 +285,12 @@ export function TxtReader({ book, onProgress }: Props) {
       return
     }
     const text = currentPage.replace(/[#*_`>-]/g, '').replace(/\n+/g, ' ')
+    // The settings panel stores the voice by `voiceURI`; match it first and
+    // fall back to `name` for values saved by older versions.
     const voice = settings.ttsVoice
-      ? window.speechSynthesis.getVoices().find((v) => v.name === settings.ttsVoice) ?? null
+      ? window.speechSynthesis
+          .getVoices()
+          .find((v) => v.voiceURI === settings.ttsVoice || v.name === settings.ttsVoice) ?? null
       : null
     tts.speak(text, { rate: settings.ttsRate, voice })
   }
