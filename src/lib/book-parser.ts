@@ -122,7 +122,11 @@ async function unzip(buffer: ArrayBuffer): Promise<ZipEntry> {
       }
       compressedSize = view.getUint32(descPos + 4, true)
       uncompressedSize = view.getUint32(descPos + 8, true)
-      offset = descPos + 12
+      // The descriptor with the 0x08074b50 signature is 16 bytes
+      // (sig + CRC + compressed size + uncompressed size). Jumping
+      // past only 12 bytes would land mid-descriptor and drop every
+      // subsequent entry from the archive.
+      offset = descPos + 16
     } else {
       offset = dataStart + compressedSize
     }

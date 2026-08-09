@@ -41,32 +41,37 @@ export function useBookSync(books: BookRecord[]) {
     booksRef.current = books
   }, [books])
 
-  const sync = useCallback(async () => {
-    if (!user) return
-    // Only sync if email is verified
-    if (!user.emailVerified) return
-    const current = booksRef.current
-    if (current.length === 0) return
+  const sync = useCallback(
+    async (force = false) => {
+      if (!user) return
+      // Only sync if email is verified
+      if (!user.emailVerified) return
+      const current = booksRef.current
+      if (current.length === 0) return
 
-    const now = Date.now()
-    // Throttle: max once per 30 seconds
-    if (now - lastSyncRef.current < 30000) return
-    lastSyncRef.current = now
+      const now = Date.now()
+      // Throttle: max once per 30 seconds (unless force — final flush on
+      // unmount/logout must never be swallowed by the throttle)
+      if (!force && now - lastSyncRef.current < 30000) return
+      lastSyncRef.current = now
 
-    await syncBooksToServer(current)
-  }, [user])
+      await syncBooksToServer(current)
+    },
+    [user],
+  )
 
   // Periodic sync (every 60 seconds)
   useEffect(() => {
     if (!user?.emailVerified) return
     sync()
-    syncIntervalRef.current = setInterval(sync, 60000)
+    syncIntervalRef.current = setInterval(() => sync(), 60000)
     return () => {
       if (syncIntervalRef.current) {
         clearInterval(syncIntervalRef.current)
       }
-      // Final sync on unmount
-      sync()
+      // Final sync on unmount — bypass the throttle so a recent interval
+      // tick cannot swallow pending progress changes.
+      void sync(true)
     }
   }, [user, sync])
 }

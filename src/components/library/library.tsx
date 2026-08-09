@@ -123,10 +123,14 @@ export function Library() {
     if (reassignedRef.current) return
     reassignedRef.current = true
     ;(async () => {
-      const count = await reassignBooksToUser(null, user.id)
-      if (count > 0) {
-        toast.success(`Привязано книг к аккаунту: ${count}`)
-        refresh()
+      try {
+        const count = await reassignBooksToUser(null, user.id)
+        if (count > 0) {
+          toast.success(`Привязано книг к аккаунту: ${count}`)
+          refresh()
+        }
+      } catch (e) {
+        console.error('Failed to reassign books', e)
       }
     })()
   }, [user?.id, refresh, user])

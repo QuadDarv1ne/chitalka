@@ -23,6 +23,16 @@ interface Props {
 
 const tocCache = new Map<string, TocItem[]>()
 
+// Bounded cache — a huge library (or re-uploaded books) must not grow this
+// Map without limit. Evict the oldest entry past 100 cached books.
+function cacheToc(id: string, items: TocItem[]) {
+  if (tocCache.size >= 100) {
+    const oldest = tocCache.keys().next().value
+    if (oldest !== undefined) tocCache.delete(oldest)
+  }
+  tocCache.set(id, items)
+}
+
 export function TocPanel({ book, onNavigate }: Props) {
   const [toc, setToc] = useState<TocItem[]>(() => tocCache.get(book.id) ?? [])
   const [loading, setLoading] = useState(() => !tocCache.has(book.id))
@@ -59,7 +69,7 @@ export function TocPanel({ book, onNavigate }: Props) {
             }))
           }
           const flattened = flatten(navigation.toc || [])
-          tocCache.set(book.id, flattened)
+          cacheToc(book.id, flattened)
           setToc(flattened)
         } catch (e) {
           console.error(e)
@@ -104,6 +114,7 @@ export function TocPanel({ book, onNavigate }: Props) {
           // If no outline, generate page list
           if (items.length === 0) {
             for (let i = 1; i <= doc.numPages; i++) {
+              if (cancelled) return
               items.push({
                 id: crypto.randomUUID(),
                 href: String(i),
@@ -113,7 +124,7 @@ export function TocPanel({ book, onNavigate }: Props) {
             }
           }
           if (!cancelled) {
-            tocCache.set(book.id, items)
+            cacheToc(book.id, items)
             setToc(items)
           }
         } catch (e) {
@@ -170,7 +181,7 @@ export function TocPanel({ book, onNavigate }: Props) {
             }
           }
           if (!cancelled) {
-            tocCache.set(book.id, items)
+            cacheToc(book.id, items)
             setToc(items)
           }
         } catch (e) {

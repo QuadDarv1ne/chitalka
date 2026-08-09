@@ -25,9 +25,14 @@ export function useTTS() {
   const rateRef = useRef(1.0)
   const voiceRef = useRef<SpeechSynthesisVoice | null>(null)
   const cancelledRef = useRef(false)
+  // Monotonic session id: browser cancel() delivers stale onend/onerror
+  // callbacks asynchronously, and a boolean flag reset right after cancel()
+  // can let the previous session's callbacks resume old chunks.
+  const sessionRef = useRef(0)
 
   useEffect(() => {
     return () => {
+      sessionRef.current++
       cancelledRef.current = true
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel()
@@ -56,6 +61,9 @@ export function useTTS() {
 
   const speak = useCallback((text: string, opts?: { rate?: number; voice?: SpeechSynthesisVoice | null }) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return
+    // Invalidate the previous session BEFORE cancel() so its pending
+    // callbacks (delivered asynchronously by the browser) are discarded.
+    const sessionId = ++sessionRef.current
     window.speechSynthesis.cancel()
     cancelledRef.current = false
     rateRef.current = opts?.rate ?? 1.0
@@ -78,11 +86,11 @@ export function useTTS() {
       u.lang = 'ru-RU'
       if (voiceRef.current) u.voice = voiceRef.current
       u.onstart = () => {
-        if (cancelledRef.current) return
+        if (sessionRef.current !== sessionId || cancelledRef.current) return
         setState((s) => ({ ...s, currentChunk: i, speaking: true, paused: false }))
       }
       u.onend = () => {
-        if (cancelledRef.current) return
+        if (sessionRef.current !== sessionId || cancelledRef.current) return
         const next = i + 1
         if (next < chunks.length) {
           window.speechSynthesis.speak(utterances[next])
@@ -96,7 +104,7 @@ export function useTTS() {
         }
       }
       u.onerror = () => {
-        if (cancelledRef.current) return
+        if (sessionRef.current !== sessionId || cancelledRef.current) return
         setState({
           speaking: false,
           paused: false,
@@ -127,6 +135,7 @@ export function useTTS() {
   const stop = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       cancelledRef.current = true
+      sessionRef.current++
       window.speechSynthesis.cancel()
       setState({
         speaking: false,

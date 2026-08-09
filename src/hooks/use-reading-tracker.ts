@@ -31,11 +31,20 @@ export function useReadingTracker(bookId: string, pagesFlipped: number) {
     const id = bookIdRef.current
 
     const flush = (now: number, flushPages: boolean) => {
-      const elapsedMin = Math.floor((now - lastFlushRef.current) / 60000)
+      const elapsed = now - lastFlushRef.current
       const pages = pagesRef.current
-      if (elapsedMin >= 1 || (flushPages && pages > 0)) {
+      if (elapsed >= 60000) {
+        // Log whole minutes and carry the sub-minute remainder over,
+        // so the elapsed seconds aren't discarded (they would otherwise
+        // accumulate below the minute threshold forever and under-count).
+        const elapsedMin = Math.floor(elapsed / 60000)
         logReading(id, elapsedMin, pages)
-        lastFlushRef.current = now
+        lastFlushRef.current = now - (elapsed % 60000)
+        pagesRef.current = 0
+      } else if (flushPages && pages > 0) {
+        // Page-only flush: log pages immediately, but keep the timer
+        // bucket untouched — minutes still accrue toward the next tick.
+        logReading(id, 0, pages)
         pagesRef.current = 0
       }
     }

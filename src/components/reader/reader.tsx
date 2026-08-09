@@ -70,7 +70,16 @@ export function Reader() {
         setCurrentTextPosition(b?.textPosition)
         setCurrentPdfPage(b?.pdfPage)
         if (b) {
-          updateBook(b.id, { lastOpenedAt: Date.now() })
+          updateBook(b.id, { lastOpenedAt: Date.now() }).catch(() => {})
+        }
+      })
+      .catch((e) => {
+        // IndexedDB can fail transiently (corrupt DB, private mode, quota).
+        // Surface the failure to the user instead of spinning forever.
+        console.error('Failed to load book', e)
+        if (!cancelled) {
+          setBook(null)
+          setLoading(false)
         }
       })
       .finally(() => {

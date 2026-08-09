@@ -35,6 +35,9 @@ function getDB() {
     throw new Error('IndexedDB only available in browser')
   }
   if (!dbPromise) {
+    // Reset on failure so a transient open error (blocked upgrade, quota,
+    // private-mode SecurityError) doesn't poison every later call until a
+    // page reload — the next getDB() attempt starts a fresh open.
     dbPromise = openDB<LibraryDB>('reader-library', 2, {
       upgrade(db, oldVersion, _newVersion, transaction) {
         if (oldVersion < 1) {
@@ -51,6 +54,9 @@ function getDB() {
           }
         }
       },
+    }).catch((e) => {
+      dbPromise = null
+      throw e
     })
   }
   return dbPromise

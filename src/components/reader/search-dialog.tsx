@@ -48,6 +48,14 @@ export function SearchDialog({ book }: Props) {
   const openRef = useRef(open)
   openRef.current = open
 
+  // Invalidate in-flight searches when the component unmounts (e.g. the
+  // reader closes mid-search) so they can't touch unmounted state.
+  useEffect(() => {
+    return () => {
+      searchSeqRef.current++
+    }
+  }, [])
+
   // Load text content (for TXT/MD/FB2)
   useEffect(() => {
     if (!open) return
