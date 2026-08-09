@@ -1,0 +1,499 @@
+{
+  "generatedAt": "2026-08-09T20:26:30.578Z",
+  "total": 49,
+  "imported": 49,
+  "failed": 0,
+  "skipped": 0,
+  "books": [
+    {
+      "name": "Маркс Карл. Капитал. Полная квинтэссенция 3-х томов - royallib.com.epub",
+      "format": "epub",
+      "formatLabel": "EPUB",
+      "title": "Маркс Карл. Капитал. Полная квинтэссенция 3-х томов - royallib.com",
+      "author": "Неизвестный автор",
+      "size": 6334973,
+      "sizeLabel": "6 МБ",
+      "imported": true
+    },
+    {
+      "name": "Abanin_S._50_Kachestv_Nastoyashego_.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Abanin_S._50_Kachestv_Nastoyashego_.a6",
+      "author": "Неизвестный автор",
+      "size": 2092656,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Afonina_N._Umnyiyitrening._Schaste_Yeto_Navyik_Kak_U.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Afonina_N._Umnyiyitrening._Schaste_Yeto_Navyik_Kak_U.a6",
+      "author": "Неизвестный автор",
+      "size": 2690131,
+      "sizeLabel": "3 МБ",
+      "imported": true
+    },
+    {
+      "name": "Aristotel_._Nonfictionbol._Metafizika_Politika_Poyet.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Aristotel_._Nonfictionbol._Metafizika_Politika_Poyet.a6",
+      "author": "Неизвестный автор",
+      "size": 3418911,
+      "sizeLabel": "3 МБ",
+      "imported": true
+    },
+    {
+      "name": "Azimov_A._Grossmeyisterf._Sami_Bogi.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Azimov_A._Grossmeyisterf._Sami_Bogi.a6",
+      "author": "Неизвестный автор",
+      "size": 2163555,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Berneyis_Ye._Yeksklyuzivnaya._Formirovanie_Obshestvenno.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Berneyis_Ye._Yeksklyuzivnaya._Formirovanie_Obshestvenno.a6",
+      "author": "Неизвестный автор",
+      "size": 1254043,
+      "sizeLabel": "1 МБ",
+      "imported": true
+    },
+    {
+      "name": "Davis_L._Tebe_Mojno_7_Klyucheyi_K_.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Davis_L._Tebe_Mojno_7_Klyucheyi_K_.a6",
+      "author": "Неизвестный автор",
+      "size": 672017,
+      "sizeLabel": "656 КБ",
+      "imported": true
+    },
+    {
+      "name": "Devi_A._Mandaly_dla_tvorchestva_i_meditacii.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Devi_A._Mandaly_dla_tvorchestva_i_meditacii",
+      "author": "Неизвестный автор",
+      "size": 15910249,
+      "sizeLabel": "15 МБ",
+      "imported": true
+    },
+    {
+      "name": "Djikandi_D._Schastlivyiyi_Karman_Poln.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Djikandi_D._Schastlivyiyi_Karman_Poln.a6",
+      "author": "Неизвестный автор",
+      "size": 2441689,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Fedorenko_P._Psychologyknowhow._Kpt_Kniga_Samopomoshi_Met.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Fedorenko_P._Psychologyknowhow._Kpt_Kniga_Samopomoshi_Met.a6",
+      "author": "Неизвестный автор",
+      "size": 1642525,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Gnatyuk_Yu._Slavyanskayakniga._Runyi_Veshego_Olega.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Gnatyuk_Yu._Slavyanskayakniga._Runyi_Veshego_Olega.a6",
+      "author": "Неизвестный автор",
+      "size": 3872536,
+      "sizeLabel": "4 МБ",
+      "imported": true
+    },
+    {
+      "name": "Goulman_D._Mifpsihologiya._Yemocionalnyiyi_Intellekt.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Goulman_D._Mifpsihologiya._Yemocionalnyiyi_Intellekt.a6",
+      "author": "Неизвестный автор",
+      "size": 2113886,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Grin_R._48_Zakonov_Vlasti.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Grin_R._48_Zakonov_Vlasti.a6",
+      "author": "Неизвестный автор",
+      "size": 3629511,
+      "sizeLabel": "3 МБ",
+      "imported": true
+    },
+    {
+      "name": "Hayiyam_O._Pritchiiaforizmyi._Samyie_Mudryie_Pritchi_I_.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Hayiyam_O._Pritchiiaforizmyi._Samyie_Mudryie_Pritchi_I_.a6",
+      "author": "Неизвестный автор",
+      "size": 1399987,
+      "sizeLabel": "1 МБ",
+      "imported": true
+    },
+    {
+      "name": "Heyig_M._Trudno_Byit_Chelovekom.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Heyig_M._Trudno_Byit_Chelovekom.a6",
+      "author": "Неизвестный автор",
+      "size": 1333802,
+      "sizeLabel": "1 МБ",
+      "imported": true
+    },
+    {
+      "name": "Kabakov_A._Novayarusskaya._Vse_Popravimo_Hroniki_Cha.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Kabakov_A._Novayarusskaya._Vse_Popravimo_Hroniki_Cha.a6",
+      "author": "Неизвестный автор",
+      "size": 2580658,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Kaufman_D._Belayaseriyak._Sam_Sebe_Mba_Samoobrazova.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Kaufman_D._Belayaseriyak._Sam_Sebe_Mba_Samoobrazova.a6",
+      "author": "Неизвестный автор",
+      "size": 2344668,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Kobayasi_I._Yeksklyuzivnaya._Ulitka_Na_Sklone_Fudzi.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Kobayasi_I._Yeksklyuzivnaya._Ulitka_Na_Sklone_Fudzi.a6",
+      "author": "Неизвестный автор",
+      "size": 841612,
+      "sizeLabel": "822 КБ",
+      "imported": true
+    },
+    {
+      "name": "Konyuhov_I._Semyaivera._Semya_Kak_Put_Zrelost_Dov.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Konyuhov_I._Semyaivera._Semya_Kak_Put_Zrelost_Dov.a6",
+      "author": "Неизвестный автор",
+      "size": 1020369,
+      "sizeLabel": "996 КБ",
+      "imported": true
+    },
+    {
+      "name": "Lao_czyi_._Bibliotekamudr._Dao_Dye_Czin_Kniga_O_Puti.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Lao_czyi_._Bibliotekamudr._Dao_Dye_Czin_Kniga_O_Puti.a6",
+      "author": "Неизвестный автор",
+      "size": 2596021,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Lao_czyi_._Dao_Dye_Czin_Kniga_Puti_II.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Lao_czyi_._Dao_Dye_Czin_Kniga_Puti_II.a6",
+      "author": "Неизвестный автор",
+      "size": 7569761,
+      "sizeLabel": "7 МБ",
+      "imported": true
+    },
+    {
+      "name": "Lebon_G._Psihologiyaklassika._Psihologiya_Narodov_I_Mass.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Lebon_G._Psihologiyaklassika._Psihologiya_Narodov_I_Mass.a6",
+      "author": "Неизвестный автор",
+      "size": 1627976,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Li_N._Osnovi_uchebnogo_akademicheskogo_risunka.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Li_N._Osnovi_uchebnogo_akademicheskogo_risunka",
+      "author": "Неизвестный автор",
+      "size": 64874070,
+      "sizeLabel": "62 МБ",
+      "imported": true
+    },
+    {
+      "name": "Lyukimson_P._Car_Solomon.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Lyukimson_P._Car_Solomon.a6",
+      "author": "Неизвестный автор",
+      "size": 1762726,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Messing_V._Ya_Prorok_Bez_Otechestva_.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Messing_V._Ya_Prorok_Bez_Otechestva_.a6",
+      "author": "Неизвестный автор",
+      "size": 1015689,
+      "sizeLabel": "992 КБ",
+      "imported": true
+    },
+    {
+      "name": "Milliardov_A._Iskusstvo_Rosta_Kak_Razvi.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Milliardov_A._Iskusstvo_Rosta_Kak_Razvi.a6",
+      "author": "Неизвестный автор",
+      "size": 665178,
+      "sizeLabel": "650 КБ",
+      "imported": true
+    },
+    {
+      "name": "Min_L._Samouchitelvos._San_In_Czyao_Celitelnyie_.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Min_L._Samouchitelvos._San_In_Czyao_Celitelnyie_.a6",
+      "author": "Неизвестный автор",
+      "size": 2554520,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Min_L._Vostochnayamed._Kitayiskaya_Medicina_Na_K.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Min_L._Vostochnayamed._Kitayiskaya_Medicina_Na_K.a6",
+      "author": "Неизвестный автор",
+      "size": 4402883,
+      "sizeLabel": "4 МБ",
+      "imported": true
+    },
+    {
+      "name": "Nicshe_F._Filosofiyavkarmane._Tak_Govoril_Zaratustra_Kn.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Nicshe_F._Filosofiyavkarmane._Tak_Govoril_Zaratustra_Kn.a6",
+      "author": "Неизвестный автор",
+      "size": 1928959,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Nikulin_Yu._Pochti_Serezno.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Nikulin_Yu._Pochti_Serezno.a6",
+      "author": "Неизвестный автор",
+      "size": 6931309,
+      "sizeLabel": "7 МБ",
+      "imported": true
+    },
+    {
+      "name": "Nil_donald_uolsh_razgovor_s_bogom_opyit_obsheniya_chelovechestva_s_vyissheyi_siloyi.mp3.zip",
+      "format": "mp3",
+      "formatLabel": "Аудиокнига",
+      "title": "donald uolsh razgovor s bogom opyit obsheniya chelovechestva s vyissheyi siloyi",
+      "author": "Nil",
+      "size": 149805604,
+      "sizeLabel": "143 МБ",
+      "imported": true
+    },
+    {
+      "name": "Pelevin_V._Edinstvennyiyi._Tayinyie_Vidyi_Na_Goru_Fudzi.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Pelevin_V._Edinstvennyiyi._Tayinyie_Vidyi_Na_Goru_Fudzi.a6",
+      "author": "Неизвестный автор",
+      "size": 2573490,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Platon_._Bibliotekaizbr._Gosudarstvo_Dialogi_Apolo.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Platon_._Bibliotekaizbr._Gosudarstvo_Dialogi_Apolo.a6",
+      "author": "Неизвестный автор",
+      "size": 3760505,
+      "sizeLabel": "4 МБ",
+      "imported": true
+    },
+    {
+      "name": "Protoiereyi_aleksandr_men_syin_chelovecheskiyi.mp3.zip",
+      "format": "mp3",
+      "formatLabel": "Аудиокнига",
+      "title": "aleksandr men syin chelovecheskiyi",
+      "author": "Protoiereyi",
+      "size": 418964652,
+      "sizeLabel": "400 МБ",
+      "imported": true
+    },
+    {
+      "name": "Rayian_holideyi_stoicizm_na_kajdyiyi_den_366_razmyishleniyi_o_mudrosti_vole_i_iskusstve_jit.mp3.zip",
+      "format": "mp3",
+      "formatLabel": "Аудиокнига",
+      "title": "holideyi stoicizm na kajdyiyi den 366 razmyishleniyi o mudrosti vole i iskusstve jit",
+      "author": "Rayian",
+      "size": 297723592,
+      "sizeLabel": "284 МБ",
+      "imported": true
+    },
+    {
+      "name": "Rojnyova_O._Lyudibojii._Prepodobnyiyi_Porfiriyi_K.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Rojnyova_O._Lyudibojii._Prepodobnyiyi_Porfiriyi_K.a6",
+      "author": "Неизвестный автор",
+      "size": 2915048,
+      "sizeLabel": "3 МБ",
+      "imported": true
+    },
+    {
+      "name": "Rovelli_K._Bolshayanauka._Gelgoland_Krasivaya_I_Str.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Rovelli_K._Bolshayanauka._Gelgoland_Krasivaya_I_Str.a6",
+      "author": "Неизвестный автор",
+      "size": 2309777,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Sarkisyan_K._Konstituciyami1._Konstituciya_Mira_Kniga_P.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Sarkisyan_K._Konstituciyami1._Konstituciya_Mira_Kniga_P.a6",
+      "author": "Неизвестный автор",
+      "size": 1616361,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Seneka_L._Yeksklyuzivnaya._O_Prirode.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Seneka_L._Yeksklyuzivnaya._O_Prirode.a6",
+      "author": "Неизвестный автор",
+      "size": 1515745,
+      "sizeLabel": "1 МБ",
+      "imported": true
+    },
+    {
+      "name": "Shopengauyer_A._Bibliotekaizbr._Mir_Kak_Volya_I_Predstavl.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Shopengauyer_A._Bibliotekaizbr._Mir_Kak_Volya_I_Predstavl.a6",
+      "author": "Неизвестный автор",
+      "size": 5472320,
+      "sizeLabel": "5 МБ",
+      "imported": true
+    },
+    {
+      "name": "Smart_reading_._Smartreadingc._Klyuchevyie_Idei_Knigi_Ye66992464.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Smart_reading_._Smartreadingc._Klyuchevyie_Idei_Knigi_Ye66992464.a6",
+      "author": "Неизвестный автор",
+      "size": 878275,
+      "sizeLabel": "858 КБ",
+      "imported": true
+    },
+    {
+      "name": "Strugackie_A._Kammerer3._Volnyi_Gasyat_Veter.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Strugackie_A._Kammerer3._Volnyi_Gasyat_Veter.a6",
+      "author": "Неизвестный автор",
+      "size": 958694,
+      "sizeLabel": "936 КБ",
+      "imported": true
+    },
+    {
+      "name": "Tolstoyi_L._Russkayalitera._Voyina_I_Mir_V_2_H_Knigah.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Tolstoyi_L._Russkayalitera._Voyina_I_Mir_V_2_H_Knigah.a6",
+      "author": "Неизвестный автор",
+      "size": 34823756,
+      "sizeLabel": "33 МБ",
+      "imported": true
+    },
+    {
+      "name": "Trotter_U._Yeksklyuzivnaya._Stadnyiyi_Instinkt_V_Mirn.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Trotter_U._Yeksklyuzivnaya._Stadnyiyi_Instinkt_V_Mirn.a6",
+      "author": "Неизвестный автор",
+      "size": 1445735,
+      "sizeLabel": "1 МБ",
+      "imported": true
+    },
+    {
+      "name": "Vitalis_V._Jenshina_Beri_I_Polzuyisya.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Vitalis_V._Jenshina_Beri_I_Polzuyisya.a6",
+      "author": "Неизвестный автор",
+      "size": 1227964,
+      "sizeLabel": "1 МБ",
+      "imported": true
+    },
+    {
+      "name": "Vyigotskiyi_L._Psihologiyaklassika._Myishlenie_I_Rech.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Vyigotskiyi_L._Psihologiyaklassika._Myishlenie_I_Rech.a6",
+      "author": "Неизвестный автор",
+      "size": 2591494,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Yenel_Ch._Sistema_Klyuch_Ko_Vselennoyi.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Yenel_Ch._Sistema_Klyuch_Ko_Vselennoyi.a6",
+      "author": "Неизвестный автор",
+      "size": 2465990,
+      "sizeLabel": "2 МБ",
+      "imported": true
+    },
+    {
+      "name": "Yepiktet_yenhiridion.mp3.zip",
+      "format": "mp3",
+      "formatLabel": "Аудиокнига",
+      "title": "yenhiridion",
+      "author": "Yepiktet",
+      "size": 21769024,
+      "sizeLabel": "21 МБ",
+      "imported": true
+    },
+    {
+      "name": "Zamyatin_E._Vsemirnayalite._O_Literature_Revolyucii_Y.a6.pdf",
+      "format": "pdf",
+      "formatLabel": "PDF",
+      "title": "Zamyatin_E._Vsemirnayalite._O_Literature_Revolyucii_Y.a6",
+      "author": "Неизвестный автор",
+      "size": 3087644,
+      "sizeLabel": "3 МБ",
+      "imported": true
+    }
+  ]
+}

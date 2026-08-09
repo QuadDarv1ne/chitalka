@@ -7,7 +7,10 @@ COPY package.json package-lock.json ./
 COPY scripts/postinstall.mjs ./scripts/postinstall.mjs
 COPY prisma ./prisma
 ENV DATABASE_URL=file:/data/chitalka.db
-RUN npm ci && npm cache clean --force
+# NOTE: `npm install` (not `npm ci`) — the lockfile was generated on Windows and
+# lacks linux-musl binaries (lightningcss, @tailwindcss/oxide, @img/sharp).
+# `npm ci` would skip them and the build would fail with missing native modules.
+RUN npm install --no-audit --no-fund && npm cache clean --force
 
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
@@ -24,10 +27,13 @@ ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV DATABASE_URL=file:/data/chitalka.db
 # Runtime deps (prisma CLI for `db push` at startup; `prisma` is in "dependencies")
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY scripts/postinstall.mjs ./scripts/postinstall.mjs
 COPY prisma ./prisma
-RUN npm ci --omit=dev && npm cache clean --force
+# NOTE: `npm install` (not `npm ci`) — the lockfile was generated on Windows and
+# lacks the linux-musl binaries for lightningcss/@tailwindcss-oxide/sharp.
+# `npm ci` would skip them and the build would fail with missing native modules.
+RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone/.next/static ./.next/static
 USER nextjs

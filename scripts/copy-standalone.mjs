@@ -10,6 +10,7 @@ if (!existsSync(standalone)) {
 const targets = [
   ['.next/static', '.next/standalone/.next/static'],
   ['public', '.next/standalone/public'],
+  ['books', '.next/standalone/books'],
 ]
 
 for (const [from, to] of targets) {

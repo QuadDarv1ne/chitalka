@@ -9,7 +9,7 @@ export interface ParsedBook {
   author: string
   cover?: string
   description?: string
-  format: 'epub' | 'txt' | 'md' | 'html' | 'pdf' | 'fb2'
+  format: 'epub' | 'txt' | 'md' | 'html' | 'pdf' | 'fb2' | 'mp3'
 }
 
 export function detectFormat(filename: string): BookRecord['format'] | null {
@@ -20,6 +20,7 @@ export function detectFormat(filename: string): BookRecord['format'] | null {
   if (lower.endsWith('.md')) return 'md'
   if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'html'
   if (lower.endsWith('.txt')) return 'txt'
+  if (lower.endsWith('.mp3') || lower.endsWith('.mp3.zip')) return 'mp3'
   return null
 }
 
@@ -431,4 +432,152 @@ export async function parsePdfMeta(file: File): Promise<ParsedBook> {
     console.warn('PDF parse failed', e)
     return defaultResult
   }
+}
+
+/**
+ * Audio book metadata parser.
+ * Extracts title/author from filename patterns like:
+ *   "Author_Title.mp3.zip" or "Author_Title.mp3"
+ */
+export function parseAudioMeta(filename: string): ParsedBook {
+  // Strip extension(s)
+  const base = filename.replace(/\.mp3\.zip$/i, '').replace(/\.mp3$/i, '')
+  // Common patterns: "Author_Title" or "Author. Title"
+  // Try splitting on first underscore, dot-space, or just underscore
+  let author = 'Неизвестный автор'
+  let title = base
+
+  // Pattern: "Firstname_Lastname._Series._Title" → author = "Firstname Lastname", title = rest
+  const dotSpace = base.match(/^(.+?)\._(.+)$/)
+  if (dotSpace) {
+    author = dotSpace[1].replace(/_/g, ' ').trim()
+    title = dotSpace[2].replace(/_/g, ' ').trim()
+  } else {
+    const underscore = base.match(/^([A-Za-zА-Яа-яЁё\s]+?)_(.+)$/)
+    if (underscore) {
+      author = underscore[1].trim()
+      title = underscore[2].replace(/_/g, ' ').trim()
+    }
+  }
+
+  // Clean up: decode transliteration hints, remove trailing dots
+  title = title.replace(/\.$/, '').trim()
+  author = author.replace(/\.$/, '').trim()
+
+  return { title, author, format: 'mp3' }
+}
+
+export interface AudioTrack {
+  name: string
+  blob: Blob
+  size: number
+}
+
+/**
+ * Extract MP3 tracks from a .mp3.zip archive.
+ * Returns tracks sorted by filename (natural sort).
+ */
+export async function extractAudioTracks(file: File | Blob): Promise<AudioTrack[]> {
+  const buffer = await file.arrayBuffer()
+  const view = new DataView(buffer)
+  const tracks: { name: string; data: Uint8Array }[] = []
+  let offset = 0
+  const MAX_ENTRY_SIZE = 512 * 1024 * 1024 // 512 MB per entry (audio files can be large)
+
+  while (offset < buffer.byteLength - 4 && tracks.length < 10000) {
+    const sig = view.getUint32(offset, true)
+    if (sig !== 0x04034b50) break
+    const flags = view.getUint16(offset + 6, true)
+    const compressionMethod = view.getUint16(offset + 8, true)
+    let compressedSize = view.getUint32(offset + 18, true)
+    let uncompressedSize = view.getUint32(offset + 22, true)
+    const filenameLen = view.getUint16(offset + 26, true)
+    const extraLen = view.getUint16(offset + 28, true)
+    const filename = new TextDecoder().decode(
+      new Uint8Array(buffer, offset + 30, filenameLen),
+    )
+    const dataStart = offset + 30 + filenameLen + extraLen
+    const usesDataDescriptor = (flags & 0x8) !== 0
+
+    if (usesDataDescriptor && compressedSize === 0 && uncompressedSize === 0) {
+      const scanEnd = Math.min(buffer.byteLength, dataStart + MAX_ENTRY_SIZE)
+      let descPos = -1
+      for (let i = dataStart; i < scanEnd - 4; i++) {
+        if (view.getUint32(i, true) === 0x08074b50) {
+          descPos = i
+          break
+        }
+      }
+      if (descPos === -1) {
+        let next = -1
+        for (let i = dataStart; i < scanEnd - 4; i++) {
+          if (view.getUint32(i, true) === 0x04034b50) {
+            next = i
+            break
+          }
+        }
+        if (next === -1) break
+        offset = next
+        continue
+      }
+      compressedSize = view.getUint32(descPos + 4, true)
+      uncompressedSize = view.getUint32(descPos + 8, true)
+      offset = descPos + 16
+    } else {
+      offset = dataStart + compressedSize
+    }
+
+    if (compressedSize > MAX_ENTRY_SIZE || uncompressedSize > MAX_ENTRY_SIZE) continue
+
+    // Only collect .mp3 files (skip directories, images, etc.)
+    if (!filename.toLowerCase().endsWith('.mp3')) continue
+    // Skip directory entries
+    if (filename.endsWith('/')) continue
+
+    try {
+      let data: Uint8Array
+      if (compressionMethod === 0) {
+        data = new Uint8Array(buffer, dataStart, compressedSize)
+      } else if (compressionMethod === 8) {
+        const compressedData = new Uint8Array(buffer, dataStart, compressedSize)
+        const blob = new Blob([compressedData])
+        const ds = new DecompressionStream('deflate-raw')
+        const stream = blob.stream().pipeThrough(ds)
+        const decompressed = await new Response(stream).arrayBuffer()
+        data = new Uint8Array(decompressed)
+      } else {
+        continue
+      }
+      tracks.push({ name: filename, data })
+    } catch (e) {
+      console.warn('Audio: failed to read entry', filename, e)
+    }
+  }
+
+  // Natural sort by filename (so track2.mp3 comes before track10.mp3)
+  const naturalCompare = (a: string, b: string) => {
+    const aParts = a.match(/(\d+|\D+)/g) || [a]
+    const bParts = b.match(/(\d+|\D+)/g) || [b]
+    for (let i = 0; i < Math.min(aParts.length, bParts.length); i++) {
+      const aNum = /^\d+$/.test(aParts[i])
+      const bNum = /^\d+$/.test(bParts[i])
+      if (aNum && bNum) {
+        const diff = parseInt(aParts[i], 10) - parseInt(bParts[i], 10)
+        if (diff !== 0) return diff
+      } else {
+        const cmp = aParts[i].localeCompare(bParts[i])
+        if (cmp !== 0) return cmp
+      }
+    }
+    return aParts.length - bParts.length
+  }
+
+  tracks.sort((a, b) => naturalCompare(a.name, b.name))
+
+  return tracks.map((t) => ({
+    name: t.name,
+    // .slice() returns a fresh Uint8Array<ArrayBuffer>, which is a valid BlobPart
+    blob: new Blob([t.data.slice()], { type: 'audio/mpeg' }),
+    size: t.data.byteLength,
+  }))
 }

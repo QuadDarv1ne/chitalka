@@ -30,6 +30,7 @@ import {
   UploadCloud,
   Download,
   Loader2,
+  FolderOpen,
 } from 'lucide-react'
 import {
   getAllBooks,
@@ -45,6 +46,7 @@ import {
   parsePdfMeta,
   parseFb2Meta,
   parseFb2Content,
+  parseAudioMeta,
 } from '@/lib/book-parser'
 import { useReaderStore, type Theme } from '@/store/reader-store'
 import { useAuth } from '@/hooks/use-auth'
@@ -61,11 +63,12 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { exportLibraryBackup, parseLibraryBackup } from '@/lib/export-utils'
 import { UserMenu } from '@/components/auth/user-menu'
+import { CollectionImport } from './collection-import'
 
 type SortKey = 'recent' | 'title' | 'added'
-type FormatFilter = 'all' | 'epub' | 'pdf' | 'txt' | 'md' | 'fb2' | 'html'
+type FormatFilter = 'all' | 'epub' | 'pdf' | 'txt' | 'md' | 'fb2' | 'html' | 'mp3'
 
-const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200 MB
+const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500 MB (includes large audiobooks)
 
 export function Library() {
   const [books, setBooks] = useState<BookRecord[]>([])
@@ -76,6 +79,7 @@ export function Library() {
   const [dragOver, setDragOver] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<BookRecord | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [collectionOpen, setCollectionOpen] = useState(false)
   const dragDepth = useRef(0)
   const fileInput = useRef<HTMLInputElement>(null)
   const openBook = useReaderStore((s) => s.openBook)
@@ -192,6 +196,8 @@ export function Library() {
                   continue
                 }
                 blob = new Blob([textContent], { type: 'text/plain' })
+              } else if (format === 'mp3') {
+                meta = parseAudioMeta(file.name)
               } else {
                 meta = await parseTextMeta(file, format)
               }
@@ -363,8 +369,8 @@ export function Library() {
           >
             <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-primary bg-background p-12">
               <UploadCloud className="h-12 w-12 text-primary" />
-              <p className="text-lg font-medium">Отпустите файлы для загрузки</p>
-              <p className="text-sm text-muted-foreground">EPUB, PDF, FB2, TXT, Markdown, HTML</p>
+            <p className="text-sm font-medium">Отпустите файлы для загрузки</p>
+            <p className="text-sm text-muted-foreground">EPUB, PDF, FB2, TXT, Markdown, HTML, MP3</p>
             </div>
           </motion.div>
         )}
@@ -434,7 +440,7 @@ export function Library() {
                 <DropdownMenuItem onClick={() => setFormatFilter('all')}>
                   Все форматы
                 </DropdownMenuItem>
-                {(['epub', 'pdf', 'fb2', 'txt', 'md', 'html'] as FormatFilter[]).map((f) => (
+                {(['epub', 'pdf', 'fb2', 'txt', 'md', 'html', 'mp3'] as FormatFilter[]).map((f) => (
                   <DropdownMenuItem key={f} onClick={() => setFormatFilter(f)}>
                     {f.toUpperCase()} {formatCounts[f] ? `(${formatCounts[f]})` : ''}
                   </DropdownMenuItem>
@@ -473,6 +479,11 @@ export function Library() {
 
             <UserMenu />
 
+            <Button variant="outline" onClick={() => setCollectionOpen(true)} className="gap-2">
+              <FolderOpen className="h-4 w-4" />
+              <span className="hidden sm:inline">Коллекция</span>
+            </Button>
+
             <Button onClick={() => fileInput.current?.click()} className="gap-2">
               <Upload className="h-4 w-4" />
               <span className="hidden sm:inline">Добавить книгу</span>
@@ -480,7 +491,7 @@ export function Library() {
             <input
               ref={fileInput}
               type="file"
-              accept=".epub,.pdf,.fb2,.txt,.md,.html,.htm"
+              accept=".epub,.pdf,.fb2,.txt,.md,.html,.htm,.mp3,.mp3.zip"
               multiple
               className="hidden"
               onChange={(e) => {
@@ -577,7 +588,7 @@ export function Library() {
       {/* Footer */}
       <footer className="border-t mt-auto">
         <div className="container mx-auto px-4 md:px-8 py-4 text-xs text-muted-foreground">
-          Все книги хранятся локально в вашем браузере. Поддерживаются EPUB, PDF, FB2, TXT, Markdown, HTML.
+          Все книги хранятся локально в вашем браузере. Поддерживаются EPUB, PDF, FB2, TXT, Markdown, HTML, MP3.
           Перетащите файлы в окно для загрузки.
         </div>
       </footer>
@@ -611,6 +622,14 @@ export function Library() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Collection import */}
+      <CollectionImport
+        open={collectionOpen}
+        onOpenChange={setCollectionOpen}
+        userId={userId}
+        onImported={refresh}
+      />
     </div>
   )
 }
@@ -676,6 +695,7 @@ const BookCard = memo(function BookCard({
     md: { label: 'MD', color: 'bg-purple-600 text-white' },
     html: { label: 'HTML', color: 'bg-orange-600 text-white' },
     fb2: { label: 'FB2', color: 'bg-cyan-600 text-white' },
+    mp3: { label: 'MP3', color: 'bg-amber-600 text-white' },
   }
   const badge = formatBadge[book.format]
 

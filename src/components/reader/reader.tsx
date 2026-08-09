@@ -19,6 +19,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { EpubReader } from './epub-reader'
 import { TxtReader } from './txt-reader'
 import { PdfReader } from './pdf-reader'
+import { AudioReader } from './audio-reader'
 import { ReaderSettingsPanel } from './settings-panel'
 import { TocPanel } from './toc-panel'
 import { BookmarksPanel } from './bookmarks-panel'
@@ -119,7 +120,10 @@ export function Reader() {
   }, [user])
 
   const handleProgressChange = useCallback(
-    async (p: number, extra?: { cfi?: string; textPosition?: number; pdfPage?: number }) => {
+    async (
+      p: number,
+      extra?: { cfi?: string; textPosition?: number; pdfPage?: number; audioTrack?: number; audioTime?: number },
+    ) => {
       setProgress(p)
       if (extra?.cfi !== undefined) setCurrentCfi(extra.cfi)
       if (extra?.textPosition !== undefined) setCurrentTextPosition(extra.textPosition)
@@ -130,6 +134,8 @@ export function Reader() {
         cfi: extra?.cfi ?? book.cfi,
         textPosition: extra?.textPosition ?? book.textPosition,
         pdfPage: extra?.pdfPage ?? book.pdfPage,
+        audioTrack: extra?.audioTrack ?? book.audioTrack,
+        audioTime: extra?.audioTime ?? book.audioTime,
       }).catch((e) => console.error('Progress save failed', e))
     },
     [book],
@@ -275,6 +281,8 @@ export function Reader() {
           <EpubReader book={book} onProgress={handleProgressChange} />
         ) : book.format === 'pdf' ? (
           <PdfReader book={book} onProgress={handleProgressChange} />
+        ) : book.format === 'mp3' ? (
+          <AudioReader book={book} onProgress={handleProgressChange} />
         ) : (
           <TxtReader book={book} onProgress={handleProgressChange} />
         )}

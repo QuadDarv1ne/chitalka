@@ -6,7 +6,7 @@ export interface BookRecord {
   id: string
   title: string
   author: string
-  format: 'epub' | 'txt' | 'md' | 'html' | 'pdf' | 'fb2'
+  format: 'epub' | 'txt' | 'md' | 'html' | 'pdf' | 'fb2' | 'mp3'
   size: number
   cover?: string // data URL
   blob: Blob
@@ -16,6 +16,8 @@ export interface BookRecord {
   cfi?: string // EPUB CFI position
   textPosition?: number // char offset for txt
   pdfPage?: number // PDF page number
+  audioTrack?: number // MP3 track index (0-based) for audiobooks
+  audioTime?: number // seconds played within current track for audiobooks
   description?: string
   userId?: string | null // null = anonymous (logged out)
 }

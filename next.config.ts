@@ -34,7 +34,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
               "media-src 'self' data: blob:",
-              "connect-src 'self'",
+              "connect-src 'self' https://api.resend.com",
               "worker-src 'self' blob:",
               "frame-src 'self' blob:",
               "object-src 'none'",
