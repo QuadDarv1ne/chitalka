@@ -98,19 +98,25 @@ ${verifyLink}
 
 Ссылка действительна 7 дней.`
 
-    const sent = await sendEmail({
-      to: normalizedEmail,
-      subject: 'Подтверждение email — Читалка',
-      html,
-      text,
-    })
-
-    return NextResponse.json({
-      ok: true,
-      ...(process.env.NODE_ENV !== 'production'
-        ? { _devVerifyLink: verifyLink, _devPreviewUrl: sent.previewUrl }
-        : {}),
-    })
+    try {
+      const sent = await sendEmail({
+        to: normalizedEmail,
+        subject: 'Подтверждение email — Читалка',
+        html,
+        text,
+      })
+      return NextResponse.json({
+        ok: true,
+        ...(process.env.NODE_ENV !== 'production'
+          ? { _devVerifyLink: verifyLink, _devPreviewUrl: sent.previewUrl }
+          : {}),
+      })
+    } catch (e) {
+      // Delivery failure must not leak account existence — return the same
+      // `ok` as for unknown/already-verified emails.
+      console.error('Failed to send verification email', e)
+      return NextResponse.json({ ok: true })
+    }
   } catch (e) {
     console.error('Resend verification error', e)
     return NextResponse.json(

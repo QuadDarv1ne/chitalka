@@ -113,12 +113,19 @@ ${resetLink}
 
 Ссылка действительна 1 час. Если вы не запрашивали сброс пароля — просто проигнорируйте это письмо.`
 
-      await sendEmail({
-        to: normalizedEmail,
-        subject: 'Восстановление пароля — Читалка',
-        html,
-        text,
-      })
+      try {
+        await sendEmail({
+          to: normalizedEmail,
+          subject: 'Восстановление пароля — Читалка',
+          html,
+          text,
+        })
+      } catch (e) {
+        // Mail delivery failing (e.g. RESEND_API_KEY not configured) must
+        // NOT leak account existence — respond ok exactly as for unknown
+        // emails, and let the user retry later.
+        console.error('Failed to send password-reset email', e)
+      }
     }
 
     return NextResponse.json({

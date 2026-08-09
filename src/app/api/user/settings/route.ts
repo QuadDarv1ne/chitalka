@@ -19,24 +19,14 @@ export async function GET() {
     })
 
     if (!settings) {
-      // Return defaults
-      return NextResponse.json({
-        settings: {
-          theme: 'light',
-          fontFamily: 'serif',
-          fontSize: 18,
-          lineHeight: 1.7,
-          margin: 3,
-          textAlign: 'justify',
-          hyphens: true,
-          ttsRate: 1.0,
-          ttsVoice: null,
-          dailyGoalMinutes: 30,
-        },
-      })
+      // `exists: false` lets the client distinguish "user has no row yet"
+      // from "user saved the defaults" — a fresh account should not have its
+      // local custom settings clobbered by the server defaults.
+      return NextResponse.json({ settings: null, exists: false })
     }
 
     return NextResponse.json({
+      exists: true,
       settings: {
         theme: settings.theme,
         fontFamily: settings.fontFamily,

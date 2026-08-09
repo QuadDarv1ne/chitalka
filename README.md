@@ -95,8 +95,10 @@ bun run start
    - `NEXT_PUBLIC_APP_URL` — `https://<project>.<user>.amvera.io`
 4. Запустите сборку. Приложение слушает порт 3000, на старте автоматически
    применяет схему Prisma (`prisma db push`) к `file:/data/chitalka.db`.
-5. Письма в production отдаются мок-сервисом — для реальной доставки задайте
-   `RESEND_API_KEY` и реализуйте SMTP в `src/lib/email.ts`.
+5. Письма в production доставляются через Resend (HTTP API, без доп. зависимостей).
+   Задайте `RESEND_API_KEY` и, при необходимости, `RESEND_FROM`. Без них письма
+   не отправляются, но регистрация/сброс пароля продолжают работать (ошибка
+   доставки логируется).
 
 ## Переменные окружения
 
@@ -110,30 +112,19 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
 ## Email-сервис для production
 
-В dev-режиме используется mock email-сервис (`src/lib/email.ts`), который логирует письма в консоль.
-Для production замените на реальный SMTP-провайдер:
+В dev-режиме используется mock email-сервис (`src/lib/email.ts`), который логирует
+письма в консоль и временный файл. В production, если задан `RESEND_API_KEY`,
+письма отправляются через [Resend](https://resend.com/) HTTP API:
 
-### Пример с Resend:
-
-```bash
-bun add resend
+```env
+RESEND_API_KEY="re_..."
+RESEND_FROM="Читалка <no-reply@yourdomain.com>"
 ```
 
-```ts
-// src/lib/email.ts
-import { Resend } from 'resend'
-const resend = new Resend(process.env.RESEND_API_KEY)
-
-export async function sendEmail(message: EmailMessage) {
-  await resend.emails.send({
-    from: 'no-reply@yourapp.com',
-    to: message.to,
-    subject: message.subject,
-    html: message.html,
-    text: message.text,
-  })
-}
-```
+Адрес отправителя должен быть подтверждён в аккаунте Resend. Если ключ не задан —
+доставка пропускается, а ошибка логируется (регистрация и сброс пароля при этом
+продолжают работать). Для другого провайдера замените `sendViaResend()` в
+`src/lib/email.ts`.
 
 ## Структура проекта
 

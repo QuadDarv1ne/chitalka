@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react'
 import dynamic from 'next/dynamic'
 import { useReaderStore } from '@/store/reader-store'
+import { SettingsSynchronizer } from '@/components/sync/settings-sync'
 import { Loader2 } from 'lucide-react'
 
 const Library = dynamic(
@@ -73,6 +74,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
+      <SettingsSynchronizer />
       {view === 'library' ? (
         <Library />
       ) : view === 'stats' ? (

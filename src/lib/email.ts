@@ -5,26 +5,15 @@ import path from 'path'
 const LOG_PATH = path.join(os.tmpdir(), 'reader-emails.log')
 
 /**
- * Mock email service.
+ * Email service.
  *
- * ⚠️ In development mode, emails are logged to the server console and also
- * stored in a temp file (see LOG_PATH) so they can be inspected.
- *
- * In production, replace this with a real SMTP/transactional email provider
- * (e.g. Resend, SendGrid, Postmark, AWS SES).
- *
- * Suggested production implementation:
- *
- * ```ts
- * import { Resend } from 'resend'
- * const resend = new Resend(process.env.RESEND_API_KEY)
- * await resend.emails.send({
- *   from: 'no-reply@yourapp.com',
- *   to,
- *   subject,
- *   html,
- * })
- * ```
+ * - In development: emails are logged to the server console and stored in a
+ *   temp file (see LOG_PATH) so they can be inspected via /api/auth/emails.
+ * - In production with RESEND_API_KEY set: delivered through the Resend HTTP
+ *   API (no extra dependency needed). RESEND_FROM overrides the sender.
+ * - In production without RESEND_API_KEY: sendEmail() throws — callers that
+ *   must not break the flow (register/forgot/resend) are responsible for
+ *   catching and continuing.
  */
 
 export interface EmailMessage {
@@ -44,22 +33,52 @@ export interface SentEmail extends EmailMessage {
 const sentEmails: SentEmail[] = []
 const MAX_STORED_EMAILS = 100
 
+async function sendViaResend(message: EmailMessage, apiKey: string): Promise<void> {
+  const from =
+    process.env.RESEND_FROM?.trim() || 'Читалка <onboarding@resend.dev>'
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: message.to,
+      subject: message.subject,
+      html: message.html,
+      text: message.text,
+    }),
+    signal: AbortSignal.timeout(10000),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`Resend API error ${res.status}: ${detail.slice(0, 200)}`)
+  }
+}
+
 export async function sendEmail(
   message: EmailMessage,
 ): Promise<SentEmail> {
-  if (process.env.NODE_ENV === 'production' && !process.env.RESEND_API_KEY) {
-    throw new Error(
-      'Email delivery is not configured. Set RESEND_API_KEY or implement an SMTP provider in src/lib/email.ts',
-    )
-  }
   const id = Math.random().toString(36).slice(2, 12)
   const sent: SentEmail = {
     ...message,
     id,
     sentAt: new Date(),
-    // In dev mode: extract reset link for display
-    previewUrl: message.html.match(/href="([^"]+)"/)?.[1],
   }
+
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error(
+        'Email delivery is not configured. Set RESEND_API_KEY or implement an SMTP provider in src/lib/email.ts',
+      )
+    }
+    await sendViaResend(message, process.env.RESEND_API_KEY)
+    return sent
+  }
+
+  // Dev mode: extract reset link for display
+  sent.previewUrl = message.html.match(/href="([^"]+)"/)?.[1]
   sentEmails.push(sent)
   // Keep memory bounded
   if (sentEmails.length > MAX_STORED_EMAILS) {
