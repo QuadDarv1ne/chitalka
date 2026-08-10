@@ -7,10 +7,9 @@ COPY package.json package-lock.json ./
 COPY scripts/postinstall.mjs ./scripts/postinstall.mjs
 COPY prisma ./prisma
 ENV DATABASE_URL=file:/data/chitalka.db
-# NOTE: `npm install` (not `npm ci`) — the lockfile was generated on Windows and
-# lacks linux-musl binaries (lightningcss, @tailwindcss/oxide, @img/sharp).
-# `npm ci` would skip them and the build would fail with missing native modules.
-RUN npm install --no-audit --no-fund && npm cache clean --force
+# Lockfile was generated on Windows — native modules resolved to Windows binaries.
+# Delete it and let npm resolve fresh for this linux-musl platform.
+RUN rm -f package-lock.json && npm install --no-audit --no-fund && npm cache clean --force
 
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
@@ -26,13 +25,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV DATABASE_URL=file:/data/chitalka.db
-# Runtime deps (prisma CLI for `db push` at startup; `prisma` is in "dependencies")
-COPY package.json package-lock.json ./
+COPY package.json ./
 COPY scripts/postinstall.mjs ./scripts/postinstall.mjs
 COPY prisma ./prisma
-# NOTE: `npm install` (not `npm ci`) — the lockfile was generated on Windows and
-# lacks the linux-musl binaries for lightningcss/@tailwindcss-oxide/sharp.
-# `npm ci` would skip them and the build would fail with missing native modules.
+# Same fix for runtime — no lockfile, npm resolves for musl
 RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone/.next/static ./.next/static
@@ -40,6 +36,4 @@ USER nextjs
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
-# Apply the Prisma schema to the SQLite DB in /data on every start — the file
-# survives redeploys because /data is a persistent volume.
 CMD ["sh", "-c", "node node_modules/prisma/build/index.js db push --skip-generate && node server.js"]
