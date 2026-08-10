@@ -23,7 +23,7 @@ server.log
 download/
 
 # local book library data (keep on disk, do not upload to GitHub)
-books/
+# books/
 
 # pdf.js worker (copied from node_modules during postinstall)
 /public/pdf.worker.min.mjs
