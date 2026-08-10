@@ -3,6 +3,7 @@
 import type { BookRecord } from '@/lib/library'
 import { initPdfWorker } from '@/lib/pdf-worker'
 import { decodeTextBytes } from '@/lib/text-encoding'
+import { unzip } from '@/lib/zip-utils'
 
 export interface ParsedBook {
   title: string
@@ -38,7 +39,7 @@ export async function parseEpubMeta(
   }
   try {
     const arrayBuffer = await file.arrayBuffer()
-    // Use JSZip-style approach via DOM unzip
+    // Use shared unzip utility
     const entries = await unzip(arrayBuffer)
     const containerXml = await readText(entries['META-INF/container.xml'])
     if (!containerXml) return defaultResult
@@ -69,90 +70,6 @@ export async function parseEpubMeta(
     console.warn('EPUB parse failed', e)
     return defaultResult
   }
-}
-
-interface ZipEntry {
-  [path: string]: Uint8Array
-}
-
-async function unzip(buffer: ArrayBuffer): Promise<ZipEntry> {
-  // Minimal unzip — only stored (0) and deflated (8), with safety caps
-  const view = new DataView(buffer)
-  const entries: ZipEntry = {}
-  let offset = 0
-  const MAX_ENTRIES = 10000
-  const MAX_ENTRY_SIZE = 64 * 1024 * 1024 // 64 MB per entry
-  while (offset < buffer.byteLength - 4 && Object.keys(entries).length < MAX_ENTRIES) {
-    const sig = view.getUint32(offset, true)
-    if (sig !== 0x04034b50) break
-    const flags = view.getUint16(offset + 6, true)
-    const compressionMethod = view.getUint16(offset + 8, true)
-    let compressedSize = view.getUint32(offset + 18, true)
-    let uncompressedSize = view.getUint32(offset + 22, true)
-    const filenameLen = view.getUint16(offset + 26, true)
-    const extraLen = view.getUint16(offset + 28, true)
-    const filename = new TextDecoder().decode(
-      new Uint8Array(buffer, offset + 30, filenameLen),
-    )
-    const dataStart = offset + 30 + filenameLen + extraLen
-    const usesDataDescriptor = (flags & 0x8) !== 0
-
-    if (usesDataDescriptor && compressedSize === 0 && uncompressedSize === 0) {
-      // Bit 3: sizes live in the data descriptor after the data — scan for it
-      const scanEnd = Math.min(buffer.byteLength, dataStart + MAX_ENTRY_SIZE)
-      let descPos = -1
-      for (let i = dataStart; i < scanEnd - 4; i++) {
-        if (view.getUint32(i, true) === 0x08074b50) {
-          descPos = i
-          break
-        }
-      }
-      if (descPos === -1) {
-        // No descriptor found — a corrupt entry. Resume scanning for the
-        // next local file header so later entries (e.g. container.xml) survive.
-        let next = -1
-        for (let i = dataStart; i < scanEnd - 4; i++) {
-          if (view.getUint32(i, true) === 0x04034b50) {
-            next = i
-            break
-          }
-        }
-        if (next === -1) break
-        offset = next
-        continue
-      }
-      compressedSize = view.getUint32(descPos + 4, true)
-      uncompressedSize = view.getUint32(descPos + 8, true)
-      // The descriptor with the 0x08074b50 signature is 16 bytes
-      // (sig + CRC + compressed size + uncompressed size). Jumping
-      // past only 12 bytes would land mid-descriptor and drop every
-      // subsequent entry from the archive.
-      offset = descPos + 16
-    } else {
-      offset = dataStart + compressedSize
-    }
-
-    // Safety caps (zip-bomb protection)
-    if (compressedSize > MAX_ENTRY_SIZE || uncompressedSize > MAX_ENTRY_SIZE) continue
-
-    try {
-      if (compressionMethod === 0) {
-        entries[filename] = new Uint8Array(buffer, dataStart, compressedSize)
-      } else if (compressionMethod === 8) {
-        // Use DecompressionStream (deflate-raw)
-        const compressedData = new Uint8Array(buffer, dataStart, compressedSize)
-        const blob = new Blob([compressedData])
-        const ds = new DecompressionStream('deflate-raw')
-        const stream = blob.stream().pipeThrough(ds)
-        const decompressed = await new Response(stream).arrayBuffer()
-        entries[filename] = new Uint8Array(decompressed)
-      }
-    } catch (e) {
-      // A corrupt entry must not abort the whole archive
-      console.warn('EPUB: failed to read entry', filename, e)
-    }
-  }
-  return entries
 }
 
 async function readText(data?: Uint8Array): Promise<string | null> {
@@ -479,78 +396,13 @@ export interface AudioTrack {
  */
 export async function extractAudioTracks(file: File | Blob): Promise<AudioTrack[]> {
   const buffer = await file.arrayBuffer()
-  const view = new DataView(buffer)
-  const tracks: { name: string; data: Uint8Array }[] = []
-  let offset = 0
-  const MAX_ENTRY_SIZE = 512 * 1024 * 1024 // 512 MB per entry (audio files can be large)
+  const entries = await unzip(buffer)
 
-  while (offset < buffer.byteLength - 4 && tracks.length < 10000) {
-    const sig = view.getUint32(offset, true)
-    if (sig !== 0x04034b50) break
-    const flags = view.getUint16(offset + 6, true)
-    const compressionMethod = view.getUint16(offset + 8, true)
-    let compressedSize = view.getUint32(offset + 18, true)
-    let uncompressedSize = view.getUint32(offset + 22, true)
-    const filenameLen = view.getUint16(offset + 26, true)
-    const extraLen = view.getUint16(offset + 28, true)
-    const filename = new TextDecoder().decode(
-      new Uint8Array(buffer, offset + 30, filenameLen),
-    )
-    const dataStart = offset + 30 + filenameLen + extraLen
-    const usesDataDescriptor = (flags & 0x8) !== 0
-
-    if (usesDataDescriptor && compressedSize === 0 && uncompressedSize === 0) {
-      const scanEnd = Math.min(buffer.byteLength, dataStart + MAX_ENTRY_SIZE)
-      let descPos = -1
-      for (let i = dataStart; i < scanEnd - 4; i++) {
-        if (view.getUint32(i, true) === 0x08074b50) {
-          descPos = i
-          break
-        }
-      }
-      if (descPos === -1) {
-        let next = -1
-        for (let i = dataStart; i < scanEnd - 4; i++) {
-          if (view.getUint32(i, true) === 0x04034b50) {
-            next = i
-            break
-          }
-        }
-        if (next === -1) break
-        offset = next
-        continue
-      }
-      compressedSize = view.getUint32(descPos + 4, true)
-      uncompressedSize = view.getUint32(descPos + 8, true)
-      offset = descPos + 16
-    } else {
-      offset = dataStart + compressedSize
-    }
-
-    if (compressedSize > MAX_ENTRY_SIZE || uncompressedSize > MAX_ENTRY_SIZE) continue
-
-    // Only collect .mp3 files (skip directories, images, etc.)
-    if (!filename.toLowerCase().endsWith('.mp3')) continue
-    // Skip directory entries
-    if (filename.endsWith('/')) continue
-
-    try {
-      let data: Uint8Array
-      if (compressionMethod === 0) {
-        data = new Uint8Array(buffer, dataStart, compressedSize)
-      } else if (compressionMethod === 8) {
-        const compressedData = new Uint8Array(buffer, dataStart, compressedSize)
-        const blob = new Blob([compressedData])
-        const ds = new DecompressionStream('deflate-raw')
-        const stream = blob.stream().pipeThrough(ds)
-        const decompressed = await new Response(stream).arrayBuffer()
-        data = new Uint8Array(decompressed)
-      } else {
-        continue
-      }
-      tracks.push({ name: filename, data })
-    } catch (e) {
-      console.warn('Audio: failed to read entry', filename, e)
+  // Only collect .mp3 files (skip directories, images, etc.)
+  const mp3Entries: { name: string; data: Uint8Array }[] = []
+  for (const [name, data] of Object.entries(entries)) {
+    if (name.toLowerCase().endsWith('.mp3') && !name.endsWith('/')) {
+      mp3Entries.push({ name, data })
     }
   }
 
@@ -572,11 +424,10 @@ export async function extractAudioTracks(file: File | Blob): Promise<AudioTrack[
     return aParts.length - bParts.length
   }
 
-  tracks.sort((a, b) => naturalCompare(a.name, b.name))
+  mp3Entries.sort((a, b) => naturalCompare(a.name, b.name))
 
-  return tracks.map((t) => ({
+  return mp3Entries.map((t) => ({
     name: t.name,
-    // .slice() returns a fresh Uint8Array<ArrayBuffer>, which is a valid BlobPart
     blob: new Blob([t.data.slice()], { type: 'audio/mpeg' }),
     size: t.data.byteLength,
   }))

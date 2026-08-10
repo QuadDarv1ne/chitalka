@@ -275,7 +275,12 @@ export function PdfReader({ book, onProgress }: Props) {
         <canvas
           ref={canvasRef}
           className="shadow-lg rounded-sm"
-          style={{ background: '#fff' }}
+          style={{
+            background:
+              settings.theme === 'dark' || settings.theme === 'contrast'
+                ? '#2a2a2a'
+                : '#ffffff',
+          }}
         />
       </div>
     </div>

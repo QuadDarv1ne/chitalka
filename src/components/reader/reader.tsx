@@ -20,6 +20,7 @@ import { EpubReader } from './epub-reader'
 import { TxtReader } from './txt-reader'
 import { PdfReader } from './pdf-reader'
 import { AudioReader } from './audio-reader'
+import { HtmlReader } from './html-reader'
 import { ReaderSettingsPanel } from './settings-panel'
 import { TocPanel } from './toc-panel'
 import { BookmarksPanel } from './bookmarks-panel'
@@ -283,6 +284,8 @@ export function Reader() {
           <PdfReader book={book} onProgress={handleProgressChange} />
         ) : book.format === 'mp3' ? (
           <AudioReader book={book} onProgress={handleProgressChange} />
+        ) : book.format === 'html' ? (
+          <HtmlReader book={book} onProgress={handleProgressChange} />
         ) : (
           <TxtReader book={book} onProgress={handleProgressChange} />
         )}

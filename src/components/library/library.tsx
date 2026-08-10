@@ -145,6 +145,11 @@ export function Library() {
       let imported = 0
       let skipped = 0
       let failed = 0
+      // Show a loading toast to give feedback during batch import
+      const toastId = toast.loading(
+        `Импорт ${list.length} файл(ов)…`,
+        { duration: Infinity },
+      )
       try {
         // Fetch existing books once so the loop below doesn't hit IndexedDB per file
         const existing = await getAllBooks(userId)
@@ -229,12 +234,12 @@ export function Library() {
         toast.error('Ошибка при чтении библиотеки')
       }
       if (imported > 0) {
-        toast.success(`Импортировано книг: ${imported}`)
+        toast.success(`Импортировано книг: ${imported}`, { id: toastId })
         await refresh()
       } else if (skipped > 0) {
-        toast.info(`Пропущено дубликатов: ${skipped}`)
+        toast.info(`Пропущено дубликатов: ${skipped}`, { id: toastId })
       } else if (failed > 0) {
-        toast.error('Ничего не импортировано')
+        toast.error('Ничего не импортировано', { id: toastId })
       }
     },
     [refresh, userId],

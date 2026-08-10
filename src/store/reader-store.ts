@@ -274,7 +274,7 @@ export const useReaderStore = create<ReaderState>()(
     }),
     {
       name: 'reader-store',
-      version: 1,
+      version: 2,
       partialize: (s) => ({
         settings: s.settings,
         bookmarks: s.bookmarks,
@@ -285,6 +285,12 @@ export const useReaderStore = create<ReaderState>()(
         let next = state
         if (version === 0) {
           next = { ...state, sessions: state.sessions ?? [] }
+        }
+        if (version === 1) {
+          // v1 → v2: ensure dailyGoalMinutes exists
+          if (next?.settings && typeof next.settings.dailyGoalMinutes !== 'number') {
+            next.settings.dailyGoalMinutes = 30
+          }
         }
         return {
           ...next,

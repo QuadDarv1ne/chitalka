@@ -40,7 +40,7 @@ function getDB() {
     // Reset on failure so a transient open error (blocked upgrade, quota,
     // private-mode SecurityError) doesn't poison every later call until a
     // page reload — the next getDB() attempt starts a fresh open.
-    dbPromise = openDB<LibraryDB>('reader-library', 2, {
+    dbPromise = openDB<LibraryDB>('reader-library', 3, {
       upgrade(db, oldVersion, _newVersion, transaction) {
         if (oldVersion < 1) {
           const store = db.createObjectStore('books', { keyPath: 'id' })
@@ -54,6 +54,9 @@ function getDB() {
           if (!store.indexNames.contains('by-userId')) {
             store.createIndex('by-userId', 'userId')
           }
+        }
+        if (oldVersion === 2) {
+          // v2 → v3: no schema changes, but reset stale DB state
         }
       },
     }).catch((e) => {
