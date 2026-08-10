@@ -7,8 +7,8 @@ COPY package.json package-lock.json ./
 COPY scripts/postinstall.mjs ./scripts/postinstall.mjs
 COPY prisma ./prisma
 ENV DATABASE_URL=file:/data/chitalka.db
-# Lockfile was generated on Windows — native modules resolved to Windows binaries.
-# Delete it and let npm resolve fresh for this linux-musl platform.
+# Lockfile was generated on Windows — all native modules (lightningcss, sharp)
+# resolved to Windows binaries. Delete it and let npm resolve fresh for musl.
 RUN rm -f package-lock.json && npm install --no-audit --no-fund && npm cache clean --force
 
 FROM base AS build
