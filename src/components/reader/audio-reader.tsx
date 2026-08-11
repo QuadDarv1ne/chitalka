@@ -46,6 +46,7 @@ export function AudioReader({ book, onProgress }: Props) {
   const [trackUrls, setTrackUrls] = useState<string[]>([])
 
   const audioRef = useRef<HTMLAudioElement>(null)
+  const trackRef = useRef(currentTrack)
   const onProgressRef = useRef(onProgress)
   onProgressRef.current = onProgress
   const settings = useReaderStore((s) => s.settings)
@@ -118,14 +119,8 @@ export function AudioReader({ book, onProgress }: Props) {
     }
     const onEnded = () => {
       // Auto-advance to next track
-      setCurrentTrack((prev) => {
-        if (prev < tracks.length - 1) {
-          setPagesFlipped((n) => n + 1)
-          return prev + 1
-        }
-        setIsPlaying(false)
-        return prev
-      })
+      setIsPlaying(false)
+      setCurrentTrack((prev) => (prev < tracks.length - 1 ? prev + 1 : prev))
     }
     const onPlay = () => setIsPlaying(true)
     const onPause = () => setIsPlaying(false)
@@ -145,8 +140,12 @@ export function AudioReader({ book, onProgress }: Props) {
     }
   }, [tracks.length])
 
-  // Restore position when track changes
+  // Restore position when track changes; count user-initiated track flips
   useEffect(() => {
+    if (trackRef.current !== currentTrack) {
+      trackRef.current = currentTrack
+      setPagesFlipped((n) => n + 1)
+    }
     const audio = audioRef.current
     if (!audio || trackUrls.length === 0) return
 
@@ -173,6 +172,15 @@ export function AudioReader({ book, onProgress }: Props) {
     }
   }, [currentTrack, trackUrls])
 
+  // Keep the audio element in sync with volume/mute/rate controls
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.volume = volume
+    audio.muted = muted
+    audio.playbackRate = playbackRate
+  }, [volume, muted, playbackRate])
+
   // Sync progress
   useEffect(() => {
     if (tracks.length === 0) return
@@ -183,6 +191,24 @@ export function AudioReader({ book, onProgress }: Props) {
       audioTime: currentTime,
     })
   }, [currentTrack, currentTime, duration, tracks.length])
+
+  const togglePlay = useCallback(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (audio.paused) {
+      audio.play().catch(() => {})
+    } else {
+      audio.pause()
+    }
+  }, [])
+
+  const prevTrack = useCallback(() => {
+    setCurrentTrack((prev) => Math.max(0, prev - 1))
+  }, [])
+
+  const nextTrack = useCallback(() => {
+    setCurrentTrack((prev) => Math.min(tracks.length - 1, prev + 1))
+  }, [tracks.length])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -198,37 +224,7 @@ export function AudioReader({ book, onProgress }: Props) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  })
-
-  const togglePlay = useCallback(() => {
-    const audio = audioRef.current
-    if (!audio) return
-    if (audio.paused) {
-      audio.play().catch(() => {})
-    } else {
-      audio.pause()
-    }
-  }, [])
-
-  const prevTrack = useCallback(() => {
-    setCurrentTrack((prev) => {
-      if (prev > 0) {
-        setPagesFlipped((n) => n + 1)
-        return prev - 1
-      }
-      return prev
-    })
-  }, [])
-
-  const nextTrack = useCallback(() => {
-    setCurrentTrack((prev) => {
-      if (prev < tracks.length - 1) {
-        setPagesFlipped((n) => n + 1)
-        return prev + 1
-      }
-      return prev
-    })
-  }, [tracks.length])
+  }, [prevTrack, nextTrack, togglePlay])
 
   const seek = useCallback((time: number) => {
     const audio = audioRef.current
@@ -240,29 +236,17 @@ export function AudioReader({ book, onProgress }: Props) {
   const handleVolumeChange = useCallback((v: number) => {
     setVolume(v)
     setMuted(false)
-    const audio = audioRef.current
-    if (audio) {
-      audio.volume = v
-      audio.muted = false
-    }
   }, [])
 
   const toggleMute = useCallback(() => {
-    setMuted((m) => {
-      const audio = audioRef.current
-      if (audio) audio.muted = !m
-      return !m
-    })
+    setMuted((m) => !m)
   }, [])
 
   const cyclePlaybackRate = useCallback(() => {
     const rates = [1, 1.25, 1.5, 1.75, 2, 0.75]
     setPlaybackRate((prev) => {
       const idx = rates.indexOf(prev)
-      const next = rates[(idx + 1) % rates.length]
-      const audio = audioRef.current
-      if (audio) audio.playbackRate = next
-      return next
+      return rates[(idx + 1) % rates.length]
     })
   }, [])
 
@@ -438,7 +422,6 @@ export function AudioReader({ book, onProgress }: Props) {
                   key={i}
                   onClick={() => {
                     setCurrentTrack(i)
-                    setPagesFlipped((n) => n + 1)
                   }}
                   className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm transition-colors hover:bg-primary/10"
                   style={{

@@ -1,10 +1,16 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
-import { useReaderStore, fontFamilyCss, type HighlightColor } from '@/store/reader-store'
+import {
+  useReaderStore,
+  fontFamilyCss,
+  highlightColors,
+  type HighlightColor,
+  type Highlight,
+} from '@/store/reader-store'
 import { decodeTextBlob } from '@/lib/text-encoding'
 import { useReadingTracker } from '@/hooks/use-reading-tracker'
 import { PAGE_WORDS } from '@/lib/constants'
@@ -36,6 +42,7 @@ export function HtmlReader({ book, onProgress }: Props) {
   // Load HTML content
   useEffect(() => {
     let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     decodeTextBlob(book.blob)
       .then((text) => {
@@ -55,13 +62,17 @@ export function HtmlReader({ book, onProgress }: Props) {
     }
   }, [book.id, book.blob, book.textPosition])
 
-  // Split HTML into pages by sections
-  const pages = useState(() => splitHtmlIntoPages(html))[0]
+  // Split HTML into pages by sections. Must be memoized on `html` — the
+  // content loads asynchronously, so a lazy useState initializer would only
+  // ever see the empty string and produce a blank reader.
+  const pages = useMemo(() => splitHtmlIntoPages(html), [html])
   const totalPages = pages.length
 
-  // Clamp page once loaded
+  // Clamp the restored page once the book is paginated (the saved position
+  // may exceed the page count for a different pagination)
   useEffect(() => {
     if (totalPages > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPage((p) => Math.max(0, Math.min(p, totalPages - 1)))
     }
   }, [totalPages])
@@ -72,12 +83,16 @@ export function HtmlReader({ book, onProgress }: Props) {
   // Highlights for current page (approximate by text position)
   const pageStartPos = page * PAGE_WORDS
   const pageEndPos = (page + 1) * PAGE_WORDS
-  const pageHighlights = highlights.filter(
-    (h) =>
-      h.bookId === book.id &&
-      h.textPosition !== undefined &&
-      h.textPosition >= pageStartPos &&
-      h.textPosition < pageEndPos,
+  const pageHighlights = useMemo(
+    () =>
+      highlights.filter(
+        (h) =>
+          h.bookId === book.id &&
+          h.textPosition !== undefined &&
+          h.textPosition >= pageStartPos &&
+          h.textPosition < pageEndPos,
+      ),
+    [highlights, book.id, pageStartPos, pageEndPos],
   )
 
   useEffect(() => {
@@ -137,6 +152,45 @@ export function HtmlReader({ book, onProgress }: Props) {
       el.removeEventListener('touchend', onTouchEnd)
     }
   }, [prev, next])
+
+  // Bookmark / highlight navigation from the panels
+  useEffect(() => {
+    const onGotoPosition = (e: Event) => {
+      const pos = (e as CustomEvent<number>).detail
+      if (typeof pos === 'number') {
+        const wordCount = Math.floor(pos / PAGE_WORDS)
+        setPage(Math.max(0, Math.min(totalPages - 1, wordCount)))
+        containerRef.current?.scrollTo({ top: 0 })
+      }
+    }
+    window.addEventListener('txt-goto-position', onGotoPosition)
+    return () => window.removeEventListener('txt-goto-position', onGotoPosition)
+  }, [totalPages])
+
+  // Messages from the reader iframe: text selection and highlight clicks
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.source !== frameRef.current?.contentWindow) return
+      const data = e.data
+      if (!data || data.__chitalka !== true) return
+      if (data.type === 'select') {
+        const rect = frameRef.current?.getBoundingClientRect()
+        setSelection({
+          x: (rect?.left ?? 0) + data.x,
+          y: (rect?.top ?? 0) + data.y,
+          text: data.text,
+        })
+      } else if (data.type === 'highlight-click') {
+        const h = highlights.find((hh) => hh.id === data.id)
+        if (h) {
+          setEditingHighlightId(h.id)
+          setEditingNote(h.note ?? '')
+        }
+      }
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [highlights])
 
   // Highlight from iframe selection
   const handleHighlight = (color: HighlightColor) => {
@@ -284,19 +338,19 @@ export function HtmlReader({ book, onProgress }: Props) {
 }
 
 /**
- * Split HTML content into pages by <h1>/<h2> headings or chunks of ~PAGE_WORDS.
+ * Split HTML content into pages by <h1>/<h2> headings or <section> tags,
+ * falling back to chunks of ~PAGE_WORDS for unstructured books.
  */
 function splitHtmlIntoPages(html: string): string[] {
-  if (!html) return ['']
+  if (!html) return []
 
-  // Try splitting by h1/h2 headings first
   const sections = html.split(/(<h[12][^>]*>.*?<\/h[12]>)|(<section[^>]*>)/gi)
   const chunks: string[] = []
   let current = ''
 
   for (const part of sections) {
     if (!part) continue
-    if (/^<h[12]/i.test(part)) {
+    if (/^<h[12]/i.test(part) || /^<section/i.test(part)) {
       if (current) {
         chunks.push(current)
         current = ''
@@ -306,13 +360,14 @@ function splitHtmlIntoPages(html: string): string[] {
   }
   if (current) chunks.push(current)
 
-  // If we got too many chunks (>200), merge them
+  // If we got too many chunks (>200), merge groups of 3 into one page
   if (chunks.length > 200) {
     const merged: string[] = []
     let acc = ''
+    let count = 0
     for (const chunk of chunks) {
       acc += chunk
-      if (merged.length % 3 === 0 && merged.length > 0) {
+      if (++count % 3 === 0) {
         merged.push(acc)
         acc = ''
       }
@@ -325,16 +380,83 @@ function splitHtmlIntoPages(html: string): string[] {
 }
 
 /**
+ * Wrap the text of saved highlights in <mark data-highlight-id> elements.
+ * Text is matched per text node (whitespace-insensitive) so attributes and
+ * markup are never touched.
+ */
+function markHighlights(content: string, highlights: Highlight[]): string {
+  if (!highlights.length || typeof DOMParser === 'undefined') return content
+
+  const doc = new DOMParser().parseFromString(content, 'text/html')
+  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT)
+  const textNodes: Text[] = []
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text)
+
+  for (const h of highlights) {
+    if (!h.text) continue
+    const color = highlightColors[h.color] ?? highlightColors.yellow
+    let re: RegExp
+    try {
+      re = new RegExp(
+        h.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'),
+        'gi',
+      )
+    } catch {
+      continue
+    }
+    for (const node of textNodes) {
+      const data = node.data
+      re.lastIndex = 0
+      let last = 0
+      let m: RegExpExecArray | null
+      let matched = false
+      const parts: (string | Node)[] = []
+      while ((m = re.exec(data)) !== null) {
+        if (m[0].length === 0) {
+          re.lastIndex++
+          continue
+        }
+        matched = true
+        parts.push(data.slice(last, m.index))
+        const mark = doc.createElement('mark')
+        mark.dataset.highlightId = h.id
+        if (h.note) mark.title = h.note
+        mark.style.background = color.bg
+        mark.style.color = color.fg
+        mark.style.padding = '0 2px'
+        mark.style.borderRadius = '2px'
+        mark.style.borderBottom = h.note ? `2px solid ${color.fg}` : 'none'
+        mark.textContent = m[0]
+        parts.push(mark)
+        last = re.lastIndex
+      }
+      if (!matched) continue
+      parts.push(data.slice(last))
+      const frag = doc.createDocumentFragment()
+      for (const part of parts) {
+        frag.appendChild(typeof part === 'string' ? doc.createTextNode(part) : part)
+      }
+      node.parentNode?.replaceChild(frag, node)
+    }
+  }
+
+  return doc.body.innerHTML
+}
+
+/**
  * Build a complete HTML page for the iframe with embedded styles.
+ * The injected script reports text selections and highlight clicks to the
+ * parent window, which owns the selection toolbar and note editor.
  */
 function buildPageHtml(
   content: string,
   settings: ReturnType<typeof useReaderStore.getState>['settings'],
-  _highlights: any[],
+  highlights: Highlight[],
 ): string {
   const bg = 'var(--reader-bg)'
   const fg = 'var(--reader-fg)'
   const fontFamily = fontFamilyCss[settings.fontFamily]
+  const marked = markHighlights(content, highlights)
 
   return `<!DOCTYPE html>
 <html>
@@ -403,7 +525,33 @@ function buildPageHtml(
 </style>
 </head>
 <body>
-${content}
+${marked}
+<script>
+(function () {
+  var markClicked = false;
+  document.addEventListener('mousedown', function (e) {
+    var t = e.target;
+    markClicked = !!(t && t.closest && t.closest('mark'));
+  });
+  document.addEventListener('mouseup', function () {
+    if (markClicked) { markClicked = false; return; }
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    var text = sel.toString().trim();
+    if (text.length < 2) return;
+    var range = sel.getRangeAt(0);
+    var rect = range.getBoundingClientRect();
+    parent.postMessage({ __chitalka: true, type: 'select', text: text, x: rect.left + rect.width / 2, y: rect.top - 10 }, '*');
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    var mark = t && t.closest ? t.closest('mark') : null;
+    if (!mark) return;
+    var id = mark.getAttribute('data-highlight-id');
+    if (id) parent.postMessage({ __chitalka: true, type: 'highlight-click', id: id }, '*');
+  });
+})();
+</script>
 </body>
 </html>`
 }

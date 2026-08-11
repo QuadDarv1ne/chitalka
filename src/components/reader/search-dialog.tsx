@@ -42,7 +42,7 @@ export function SearchDialog({ book }: Props) {
   const [textContent, setTextContent] = useState<string>('')
   const [textLoaded, setTextLoaded] = useState(false)
   // Search is text-format-only for the button gating (PDF/EPUB search works without preprocessing)
-  const needsText = book.format === 'txt' || book.format === 'md' || book.format === 'fb2'
+  const needsText = book.format === 'txt' || book.format === 'md' || book.format === 'fb2' || book.format === 'html'
   // Monotonic counter: stale (out-of-order) search results are discarded
   const searchSeqRef = useRef(0)
   const openRef = useRef(open)
@@ -56,11 +56,11 @@ export function SearchDialog({ book }: Props) {
     }
   }, [])
 
-  // Load text content (for TXT/MD/FB2)
+  // Load text content (for TXT/MD/FB2/HTML)
   useEffect(() => {
     if (!open) return
     let cancelled = false
-    if (book.format === 'txt' || book.format === 'md' || book.format === 'fb2') {
+    if (book.format === 'txt' || book.format === 'md' || book.format === 'fb2' || book.format === 'html') {
       setTextLoaded(false)
       decodeTextBlob(book.blob)
         .then((text) => {
@@ -87,7 +87,7 @@ export function SearchDialog({ book }: Props) {
     setLoading(true)
     setSearched(true)
     try {
-      if (book.format === 'txt' || book.format === 'md' || book.format === 'fb2') {
+      if (book.format === 'txt' || book.format === 'md' || book.format === 'fb2' || book.format === 'html') {
         const lower = textContent.toLowerCase()
         const q = query.toLowerCase()
         const found: SearchResult[] = []
@@ -194,7 +194,7 @@ export function SearchDialog({ book }: Props) {
 
   const goTo = useCallback(
     (result: SearchResult) => {
-      if (book.format === 'txt' || book.format === 'md' || book.format === 'fb2') {
+      if (book.format === 'txt' || book.format === 'md' || book.format === 'fb2' || book.format === 'html') {
         window.dispatchEvent(
           new CustomEvent('txt-goto-position', { detail: result.matchIndex }),
         )
