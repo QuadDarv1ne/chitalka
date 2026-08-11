@@ -3,25 +3,33 @@ import bcrypt from 'bcryptjs'
 import { SignJWT, jwtVerify } from 'jose'
 import { db } from '@/lib/db'
 
-if (!process.env.JWT_SECRET) {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('JWT_SECRET environment variable is required in production')
-  }
-  console.warn('⚠️ JWT_SECRET not set — using a random dev-only secret. Set JWT_SECRET in .env for persistent sessions across restarts.')
-} else if (new TextEncoder().encode(process.env.JWT_SECRET).byteLength < 32) {
-  // HS256 requires a 256-bit key; jose rejects shorter secrets with an opaque error
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('JWT_SECRET must be at least 32 bytes long in production')
-  }
-  console.warn('⚠️ JWT_SECRET is shorter than 32 bytes — sessions will fail with jose. Set a longer JWT_SECRET in .env.')
-}
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || crypto.randomUUID(),
-)
-
 const SESSION_COOKIE = 'reader-session'
 const DEFAULT_SESSION_DURATION = 60 * 60 * 24 * 30 // 30 days
 const REMEMBER_ME_DURATION = 60 * 60 * 24 * 365 // 1 year
+
+// Lazy-initialized JWT secret with validation
+let JWT_SECRET: Uint8Array | null = null
+
+function getJwtSecret(): Uint8Array {
+  if (JWT_SECRET) return JWT_SECRET
+
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET environment variable is required in production')
+    }
+    console.warn('⚠️ JWT_SECRET not set — using a random dev-only secret. Set JWT_SECRET in .env for persistent sessions across restarts.')
+  } else if (new TextEncoder().encode(secret).byteLength < 32) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET must be at least 32 bytes long in production')
+    }
+    console.warn('⚠️ JWT_SECRET is shorter than 32 bytes — sessions will fail with jose. Set a longer JWT_SECRET in .env.')
+  }
+
+  const secretBytes = new TextEncoder().encode(secret || crypto.randomUUID())
+  JWT_SECRET = secretBytes
+  return secretBytes
+}
 
 export interface SessionPayload {
   userId: string
@@ -65,7 +73,7 @@ export async function createSession(
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(`${duration}s`)
-    .sign(JWT_SECRET)
+    .sign(getJwtSecret())
 
   await db.session.update({
     where: { id: session.id },
@@ -79,7 +87,7 @@ export async function verifySession(
   token: string,
 ): Promise<SessionPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET)
+    const { payload } = await jwtVerify(token, getJwtSecret())
     const sessionPayload = payload as unknown as SessionPayload
     if (typeof sessionPayload.userId !== 'string' || !sessionPayload.userId) {
       return null

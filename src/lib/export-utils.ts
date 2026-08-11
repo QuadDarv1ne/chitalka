@@ -149,5 +149,18 @@ export async function parseLibraryBackup(file: File): Promise<BackupData> {
   if (!Array.isArray(backup.books) || backup.books.length > 5000) {
     throw new Error('Некорректные данные книг в резервной копии')
   }
+  // Validate required fields
+  if (!backup.settings || typeof backup.settings !== 'object') {
+    throw new Error('Отсутствуют настройки в резервной копии')
+  }
+  if (!Array.isArray(backup.bookmarks)) {
+    throw new Error('Некорректные данные закладок в резервной копии')
+  }
+  if (!Array.isArray(backup.highlights)) {
+    throw new Error('Некорректные данные выделений в резервной копии')
+  }
+  if (!Array.isArray(backup.sessions)) {
+    throw new Error('Некорректные данные сессий чтения в резервной копии')
+  }
   return data as BackupData
 }
