@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { hashPassword, createSession, getSessionCookieName, getSessionDuration, getClientIp, getUserAgent, generateResetToken, isCookieSecure } from '@/lib/auth'
@@ -143,7 +145,7 @@ ${verifyLink}
       })
       previewUrl = sent.previewUrl
     } catch (e) {
-      console.warn('Failed to send welcome email', e)
+      logger.warn('Failed to send welcome email', e)
     }
 
     const { token } = await createSession(
@@ -176,7 +178,7 @@ ${verifyLink}
         : {}),
     })
   } catch (e) {
-    console.error('Register error', e)
+    logger.error('Register error', e)
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 },

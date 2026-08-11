@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { getSessionCookieName, verifySession, revokeSession } from '@/lib/auth'
 import { cookies } from 'next/headers'
@@ -17,7 +18,7 @@ export async function POST() {
     cookieStore.delete(getSessionCookieName())
     return NextResponse.json({ ok: true })
   } catch (e) {
-    console.error('Logout error', e)
+    logger.error('Logout error', e)
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 },

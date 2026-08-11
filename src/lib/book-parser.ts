@@ -4,6 +4,7 @@ import type { BookRecord } from '@/lib/library'
 import { initPdfWorker } from '@/lib/pdf-worker'
 import { decodeTextBytes } from '@/lib/text-encoding'
 import { unzip } from '@/lib/zip-utils'
+import { logger } from '@/lib/logger'
 
 export interface ParsedBook {
   title: string
@@ -67,7 +68,7 @@ export async function parseEpubMeta(
       format: 'epub',
     }
   } catch (e) {
-    console.warn('EPUB parse failed', e)
+    logger.warn('EPUB parse failed', e)
     return defaultResult
   }
 }
@@ -213,7 +214,7 @@ export async function parseFb2Meta(file: File): Promise<ParsedBook> {
     const cover = await getCover()
     return { title, author, cover, description, format: 'fb2' }
   } catch (e) {
-    console.warn('FB2 parse failed', e)
+    logger.warn('FB2 parse failed', e)
     return defaultResult
   }
 }
@@ -228,7 +229,7 @@ export async function parseFb2Meta(file: File): Promise<ParsedBook> {
 export async function parseFb2Content(file: File): Promise<string> {
   // Guard against server-side execution — DOMParser is not available there
   if (typeof DOMParser === 'undefined') {
-    console.warn('parseFb2Content called on server — DOMParser unavailable')
+    logger.warn('parseFb2Content called on server — DOMParser unavailable')
     return ''
   }
   try {
@@ -292,7 +293,7 @@ export async function parseFb2Content(file: File): Promise<string> {
 
     return result.join('\n\n')
   } catch (e) {
-    console.error('FB2 content parse failed', e)
+    logger.error('FB2 content parse failed', e)
     return ''
   }
 }
@@ -347,14 +348,14 @@ export async function parsePdfMeta(file: File): Promise<ParsedBook> {
         await page.render({ canvasContext: ctx, viewport, canvas } as any).promise
         cover = canvas.toDataURL('image/jpeg', 0.7)
       } catch (e) {
-        console.warn('PDF cover render failed', e)
+        logger.warn('PDF cover render failed', e)
       }
       return { title, author, cover, format: 'pdf' }
     } finally {
       await loadingTask.destroy().catch(() => {})
     }
   } catch (e) {
-    console.warn('PDF parse failed', e)
+    logger.warn('PDF parse failed', e)
     return defaultResult
   }
 }

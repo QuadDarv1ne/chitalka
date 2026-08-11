@@ -1,5 +1,6 @@
 'use client'
 
+import { logger } from '@/lib/logger'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -71,7 +72,7 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
       // Select all by default
       setSelected(new Set(list.map((f) => f.name)))
     } catch (e) {
-      console.error('Failed to load collection', e)
+      logger.error('Failed to load collection', e)
       setError('Не удалось загрузить список файлов')
     } finally {
       setLoading(false)
@@ -191,7 +192,7 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
           existingHashes.add(hex)
           imported++
         } catch (e) {
-          console.error('Import failed:', file.name, e)
+          logger.error('Import failed:', file.name, e)
         }
         setProgress((p) => ({ ...p, done: p.done + 1 }))
       }

@@ -1,5 +1,6 @@
 'use client'
 
+import { logger } from '@/lib/logger'
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -75,7 +76,7 @@ export function Account() {
         setSessions(data.sessions || [])
       }
     } catch (e) {
-      console.error(e)
+      logger.error(e)
     } finally {
       setLoadingSessions(false)
     }

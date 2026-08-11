@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/session'
@@ -39,7 +41,7 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({ user: updated })
   } catch (e) {
-    console.error('Update profile error', e)
+    logger.error('Update profile error', e)
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 },

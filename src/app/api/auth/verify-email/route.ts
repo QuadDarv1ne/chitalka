@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createSession, getSessionCookieName, getSessionDuration, isCookieSecure } from '@/lib/auth'
@@ -80,7 +82,7 @@ export async function POST(req: Request) {
       },
     })
   } catch (e) {
-    console.error('Verify email error', e)
+    logger.error('Verify email error', e)
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 },

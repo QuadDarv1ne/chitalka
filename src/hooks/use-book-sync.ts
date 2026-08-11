@@ -1,5 +1,6 @@
 'use client'
 
+import { logger } from '@/lib/logger'
 import { useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import type { BookRecord } from '@/lib/library'
@@ -24,7 +25,7 @@ export async function syncBooksToServer(books: BookRecord[]): Promise<void> {
       body: JSON.stringify({ books: books.map(bookToSyncPayload) }),
     })
   } catch (e) {
-    console.error('Book sync failed', e)
+    logger.error('Book sync failed', e)
   }
 }
 

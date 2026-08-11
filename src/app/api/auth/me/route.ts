@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { verifySession, getSessionCookieName } from '@/lib/auth'
 import { db } from '@/lib/db'
@@ -28,7 +30,7 @@ export async function GET() {
 
     return NextResponse.json({ user })
   } catch (e) {
-    console.error('Me error', e)
+    logger.error('Me error', e)
     return NextResponse.json({ user: null })
   }
 }

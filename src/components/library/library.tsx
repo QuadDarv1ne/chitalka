@@ -1,5 +1,6 @@
 'use client'
 
+import { logger } from '@/lib/logger'
 import { memo, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -105,7 +106,7 @@ export function Library() {
       const all = await getAllBooks(userId)
       setBooks(all)
     } catch (e) {
-      console.error(e)
+      logger.error(e)
       toast.error('Не удалось загрузить библиотеку')
     } finally {
       setLoading(false)
@@ -134,7 +135,7 @@ export function Library() {
           refresh()
         }
       } catch (e) {
-        console.error('Failed to reassign books', e)
+        logger.error('Failed to reassign books', e)
       }
     })()
   }, [user?.id, refresh, user])
@@ -222,7 +223,7 @@ export function Library() {
               existingHashes.add(headHash)
               imported++
             } catch (e) {
-              console.error(e)
+              logger.error(e)
               toast.error(`Ошибка импорта: ${file.name}`)
               failed++
             }
@@ -230,7 +231,7 @@ export function Library() {
         })
         await Promise.all(workers)
       } catch (e) {
-        console.error(e)
+        logger.error(e)
         toast.error('Ошибка при чтении библиотеки')
       }
       if (imported > 0) {
@@ -289,7 +290,7 @@ export function Library() {
         )
         await refresh()
       } catch (e) {
-        console.error(e)
+        logger.error(e)
         toast.error(e instanceof Error ? e.message : 'Ошибка восстановления')
       }
     },
@@ -469,7 +470,7 @@ export function Library() {
                       )
                       toast.success('Резервная копия создана')
                     } catch (e) {
-                      console.error(e)
+                      logger.error(e)
                       toast.error('Ошибка экспорта')
                     }
                   }}

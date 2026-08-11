@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { hashPassword, createSession, getSessionCookieName, getSessionDuration, getClientIp, getUserAgent, isCookieSecure } from '@/lib/auth'
@@ -94,7 +96,7 @@ export async function POST(req: Request) {
       },
     })
   } catch (e) {
-    console.error('Reset password error', e)
+    logger.error('Reset password error', e)
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 },

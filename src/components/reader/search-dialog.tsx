@@ -1,5 +1,6 @@
 'use client'
 
+import { logger } from '@/lib/logger'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Dialog,
@@ -69,7 +70,7 @@ export function SearchDialog({ book }: Props) {
             setTextLoaded(true)
           }
         })
-        .catch((e) => console.error(e))
+        .catch((e) => logger.error(e))
     }
     return () => { cancelled = true }
   }, [open, book])
@@ -175,7 +176,7 @@ export function SearchDialog({ book }: Props) {
                 })
                 idx = lower.indexOf(q, idx + 1)
               }
-            } catch { console.warn('EPUB spine item load failed') }
+            } catch { logger.warn('EPUB spine item load failed') }
           }
           if (searchSeqRef.current === seq && openRef.current) setResults(found)
         } finally {
@@ -186,7 +187,7 @@ export function SearchDialog({ book }: Props) {
         }
       }
     } catch (e) {
-      console.error('Search failed', e)
+      logger.error('Search failed', e)
     } finally {
       if (searchSeqRef.current === seq) setLoading(false)
     }

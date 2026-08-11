@@ -1,5 +1,6 @@
 'use client'
 
+import { logger } from '@/lib/logger'
 import { useEffect, useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -45,7 +46,7 @@ export function Stats() {
       .then((b) => {
         if (!cancelled) setBooks(b)
       })
-      .catch((e) => console.error(e))
+      .catch((e) => logger.error(e))
     return () => {
       cancelled = true
     }

@@ -1,5 +1,6 @@
 'use client'
 
+import { logger } from '@/lib/logger'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -94,7 +95,7 @@ export function AudioReader({ book, onProgress }: Props) {
         setTrackUrls(urls)
         setCurrentTrack((prev) => Math.max(0, Math.min(prev, parsedTracks.length - 1)))
       } catch (e) {
-        console.error('Audio track extraction failed', e)
+        logger.error('Audio track extraction failed', e)
       } finally {
         if (!cancelled) setLoading(false)
       }

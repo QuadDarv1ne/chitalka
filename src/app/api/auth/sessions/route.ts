@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { getCurrentUser, getSessionPayload } from '@/lib/session'
 import { getUserSessions, revokeSession, revokeAllSessionsExcept } from '@/lib/auth'
@@ -26,7 +27,7 @@ export async function GET() {
       })),
     })
   } catch (e) {
-    console.error('Get sessions error', e)
+    logger.error('Get sessions error', e)
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 },
@@ -84,7 +85,7 @@ export async function DELETE(req: Request) {
     }
     return NextResponse.json({ ok: true })
   } catch (e) {
-    console.error('Delete session error', e)
+    logger.error('Delete session error', e)
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 },

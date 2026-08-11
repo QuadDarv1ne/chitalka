@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { generateResetToken } from '@/lib/auth'
@@ -114,11 +116,11 @@ ${verifyLink}
     } catch (e) {
       // Delivery failure must not leak account existence — return the same
       // `ok` as for unknown/already-verified emails.
-      console.error('Failed to send verification email', e)
+      logger.error('Failed to send verification email', e)
       return NextResponse.json({ ok: true })
     }
   } catch (e) {
-    console.error('Resend verification error', e)
+    logger.error('Resend verification error', e)
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 },

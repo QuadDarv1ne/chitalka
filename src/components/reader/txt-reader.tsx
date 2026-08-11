@@ -1,5 +1,6 @@
 'use client'
 
+import { logger } from '@/lib/logger'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -65,7 +66,7 @@ export function TxtReader({ book, onProgress }: Props) {
           setPage(Math.max(0, wordCount))
         }
       })
-      .catch((e) => console.error(e))
+      .catch((e) => logger.error(e))
       .finally(() => {
         if (!cancelled) setLoading(false)
       })

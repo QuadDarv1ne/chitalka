@@ -1,4 +1,5 @@
 import 'server-only'
+import { logger } from '@/lib/logger'
 import os from 'os'
 import path from 'path'
 
@@ -86,22 +87,22 @@ export async function sendEmail(
   }
 
   // Log to console (visible in dev.log) — dev only, no token leakage in prod
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  console.log(`📧 EMAIL SENT (dev mode)`)
-  console.log(`To: ${message.to}`)
-  console.log(`Subject: ${message.subject}`)
-  console.log(`Body: ${message.text}`)
+  logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+  logger.info(`EMAIL SENT (dev mode)`)
+  logger.info(`To: ${message.to}`)
+  logger.info(`Subject: ${message.subject}`)
+  logger.info(`Body: ${message.text}`)
   if (sent.previewUrl) {
-    console.log(`🔗 Reset link: ${sent.previewUrl}`)
+    logger.info(`Reset link: ${sent.previewUrl}`)
   }
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+  logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
   // Also append to file for retrieval
   try {
     const fs = await import('fs/promises')
     const logEntry = `[${sent.sentAt.toISOString()}] To: ${message.to} | Subject: ${message.subject} | ${sent.previewUrl || ''}\n`
     await fs.appendFile(LOG_PATH, logEntry)
-  } catch { console.warn('Failed to write email log') }
+  } catch { logger.warn('Failed to write email log') }
 
   return sent
 }

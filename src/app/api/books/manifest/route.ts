@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -43,7 +44,7 @@ export async function GET() {
 
     return NextResponse.json({ files: list })
   } catch (e) {
-    console.error('Manifest error', e)
+    logger.error('Manifest error', e)
     return NextResponse.json({ files: [] })
   }
 }

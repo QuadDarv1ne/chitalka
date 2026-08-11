@@ -1,5 +1,6 @@
 'use client'
 
+import { logger } from '@/lib/logger'
 import { useEffect, useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { BookOpen, FileText } from 'lucide-react'
@@ -72,7 +73,7 @@ export function TocPanel({ book, onNavigate }: Props) {
           cacheToc(book.id, flattened)
           setToc(flattened)
         } catch (e) {
-          console.error(e)
+          logger.error(e)
         } finally {
           try {
             epubBook?.destroy()
@@ -99,7 +100,7 @@ export function TocPanel({ book, onNavigate }: Props) {
                     const idx = await doc.getPageIndex(dest[0])
                     pageNum = idx + 1
                   }
-                } catch { console.warn('PDF destination lookup failed') }
+                } catch { logger.warn('PDF destination lookup failed') }
               }
               items.push({
                 id: crypto.randomUUID(),
@@ -128,7 +129,7 @@ export function TocPanel({ book, onNavigate }: Props) {
             setToc(items)
           }
         } catch (e) {
-          console.error(e)
+          logger.error(e)
         } finally {
           doc?.destroy().catch(() => {})
         }
@@ -185,7 +186,7 @@ export function TocPanel({ book, onNavigate }: Props) {
             setToc(items)
           }
         } catch (e) {
-          console.error(e)
+          logger.error(e)
         }
       }
       if (!cancelled) setLoading(false)

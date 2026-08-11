@@ -1,5 +1,6 @@
 'use client'
 
+import { logger } from '@/lib/logger'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import ePub, { type Book, type Rendition } from 'epubjs'
 import { Button } from '@/components/ui/button'
@@ -88,14 +89,14 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
           }
         } catch {
           if (disposed) return
-          console.warn('EPUB: CFI invalid, opening from the start')
+          logger.warn('EPUB: CFI invalid, opening from the start')
           await rendition.display()
         }
         if (disposed) return
         setReady(true)
         updateNavButtons()
       } catch (e) {
-        console.error('EPUB render failed', e)
+        logger.error('EPUB render failed', e)
       }
     }
     go()
@@ -130,7 +131,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       const href = (e as CustomEvent<string>).detail
       if (href && renditionRef.current) {
         renditionRef.current.display(href).catch(() => {
-          console.warn('EPUB: failed to navigate to', href)
+          logger.warn('EPUB: failed to navigate to', href)
         })
       }
     }
@@ -138,7 +139,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       const cfi = (e as CustomEvent<string>).detail
       if (cfi && renditionRef.current) {
         renditionRef.current.display(cfi).catch(() => {
-          console.warn('EPUB: failed to navigate to CFI', cfi)
+          logger.warn('EPUB: failed to navigate to CFI', cfi)
         })
       }
     }
@@ -149,7 +150,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
         const item = spine.get(idx)
         if (item && renditionRef.current) {
           renditionRef.current.display(item.href).catch(() => {
-            console.warn('EPUB: failed to navigate to spine item', idx)
+            logger.warn('EPUB: failed to navigate to spine item', idx)
           })
         }
       }
@@ -167,11 +168,11 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       rendition.off('relocated', onLocated)
       try {
         rendition.destroy()
-      } catch { console.warn('Rendition destroy failed') }
+      } catch { logger.warn('Rendition destroy failed') }
       try {
         // Fully release the archive/zip resources
         epubBook.destroy()
-      } catch { console.warn('EPUB book destroy failed') }
+      } catch { logger.warn('EPUB book destroy failed') }
       URL.revokeObjectURL(blobUrl)
       bookRef.current = null
       renditionRef.current = null

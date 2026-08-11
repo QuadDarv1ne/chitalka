@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/session'
@@ -41,7 +43,7 @@ export async function GET() {
       },
     })
   } catch (e) {
-    console.error('Get settings error', e)
+    logger.error('Get settings error', e)
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 },
@@ -151,7 +153,7 @@ export async function PUT(req: Request) {
       },
     })
   } catch (e) {
-    console.error('Update settings error', e)
+    logger.error('Update settings error', e)
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 },

@@ -1,5 +1,6 @@
 'use client'
 
+import { logger } from '@/lib/logger'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -78,7 +79,7 @@ export function Reader() {
       .catch((e) => {
         // IndexedDB can fail transiently (corrupt DB, private mode, quota).
         // Surface the failure to the user instead of spinning forever.
-        console.error('Failed to load book', e)
+        logger.error('Failed to load book', e)
         if (!cancelled) {
           setBook(null)
           setLoading(false)
@@ -109,7 +110,7 @@ export function Reader() {
           const b = await getBook(id)
           if (b) await syncBooksToServer([b])
         } catch (e) {
-          console.error('Final sync failed', e)
+          logger.error('Final sync failed', e)
         }
       })()
     }
@@ -140,7 +141,7 @@ export function Reader() {
         pdfPage: extra?.pdfPage,
         audioTrack: extra?.audioTrack,
         audioTime: extra?.audioTime,
-      }).catch((e) => console.error('Progress save failed', e))
+      }).catch((e) => logger.error('Progress save failed', e))
     },
     [],
   )

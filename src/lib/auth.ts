@@ -2,6 +2,7 @@ import 'server-only'
 import bcrypt from 'bcryptjs'
 import { SignJWT, jwtVerify } from 'jose'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 const SESSION_COOKIE = 'reader-session'
 const DEFAULT_SESSION_DURATION = 60 * 60 * 24 * 30 // 30 days
@@ -18,12 +19,12 @@ function getJwtSecret(): Uint8Array {
     if (process.env.NODE_ENV === 'production') {
       throw new Error('JWT_SECRET environment variable is required in production')
     }
-    console.warn('⚠️ JWT_SECRET not set — using a random dev-only secret. Set JWT_SECRET in .env for persistent sessions across restarts.')
+    logger.warn('JWT_SECRET not set — using a random dev-only secret. Set JWT_SECRET in .env for persistent sessions across restarts.')
   } else if (new TextEncoder().encode(secret).byteLength < 32) {
     if (process.env.NODE_ENV === 'production') {
       throw new Error('JWT_SECRET must be at least 32 bytes long in production')
     }
-    console.warn('⚠️ JWT_SECRET is shorter than 32 bytes — sessions will fail with jose. Set a longer JWT_SECRET in .env.')
+    logger.warn('JWT_SECRET is shorter than 32 bytes — sessions will fail with jose. Set a longer JWT_SECRET in .env.')
   }
 
   const secretBytes = new TextEncoder().encode(secret || crypto.randomUUID())
@@ -109,7 +110,7 @@ export async function verifySession(
 
     return sessionPayload
   } catch (e) {
-    console.warn('Session verification failed', e)
+    logger.error('Session verification failed', e)
     return null
   }
 }

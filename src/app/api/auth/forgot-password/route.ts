@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { generateResetToken } from '@/lib/auth'
@@ -124,7 +126,7 @@ ${resetLink}
         // Mail delivery failing (e.g. RESEND_API_KEY not configured) must
         // NOT leak account existence — respond ok exactly as for unknown
         // emails, and let the user retry later.
-        console.error('Failed to send password-reset email', e)
+        logger.error('Failed to send password-reset email', e)
       }
     }
 
@@ -137,7 +139,7 @@ ${resetLink}
         : {}),
     })
   } catch (e) {
-    console.error('Forgot password error', e)
+    logger.error('Forgot password error', e)
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 },

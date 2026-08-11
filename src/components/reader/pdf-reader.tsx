@@ -1,5 +1,6 @@
 'use client'
 
+import { logger } from '@/lib/logger'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -79,7 +80,7 @@ export function PdfReader({ book, onProgress }: Props) {
         setLoading(false)
       } catch (e) {
         if (cancelled) return
-        console.error('PDF load failed', e)
+        logger.error('PDF load failed', e)
         setLoading(false)
       }
     })()
@@ -90,7 +91,7 @@ export function PdfReader({ book, onProgress }: Props) {
         docRef.current?.cleanup()
         // Fully release the document and its worker
         loadingTaskRef.current?.destroy().catch(() => {})
-      } catch { console.warn('PDF cleanup failed') }
+      } catch { logger.warn('PDF cleanup failed') }
       docRef.current = null
       loadingTaskRef.current = null
     }
@@ -132,7 +133,7 @@ export function PdfReader({ book, onProgress }: Props) {
         await renderTask.promise
       } catch (e) {
         if ((e as { name?: string })?.name === 'RenderingCancelledException') return
-        console.error('PDF render failed', e)
+        logger.error('PDF render failed', e)
       } finally {
         setPageLoading(false)
       }

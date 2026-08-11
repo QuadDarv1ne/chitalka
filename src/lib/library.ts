@@ -1,6 +1,7 @@
 'use client'
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import { logger } from '@/lib/logger'
 
 export interface BookRecord {
   id: string
@@ -44,7 +45,7 @@ function getDB() {
     openAttempts++
     if (openAttempts > MAX_OPEN_ATTEMPTS) {
       const err = new Error('IndexedDB: max open attempts exceeded')
-      console.error('IndexedDB open failed after retries', err)
+      logger.error('IndexedDB open failed after retries', err)
       throw err
     }
 
@@ -73,7 +74,7 @@ function getDB() {
     }).catch((e) => {
       dbPromise = null
       openAttempts++
-      console.warn('IndexedDB open failed (attempt', openAttempts, ')', e)
+      logger.warn('IndexedDB open failed (attempt', openAttempts, ')', e)
       throw e
     })
   }
