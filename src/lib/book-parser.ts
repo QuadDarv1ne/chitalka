@@ -221,8 +221,16 @@ export async function parseFb2Meta(file: File): Promise<ParsedBook> {
 /**
  * FB2 → plain text converter. Reads <body> <section> <p> elements,
  * preserving chapter boundaries for pagination.
+ *
+ * NOTE: Uses DOMParser which is browser-only. Must only be called in
+ * client components or with 'use client' directive.
  */
 export async function parseFb2Content(file: File): Promise<string> {
+  // Guard against server-side execution — DOMParser is not available there
+  if (typeof DOMParser === 'undefined') {
+    console.warn('parseFb2Content called on server — DOMParser unavailable')
+    return ''
+  }
   try {
     const text = decodeTextBytes(await file.arrayBuffer())
     const parser = new DOMParser()

@@ -119,8 +119,10 @@ export function getRecentEmails(limit = 10): SentEmail[] {
 
 /**
  * Find a sent email by recipient address (for password reset preview).
+ * Only available in development — blocks in production to prevent data leaks.
  */
 export function findEmailByRecipient(email: string): SentEmail | undefined {
+  if (process.env.NODE_ENV === 'production') return undefined
   return sentEmails
     .slice()
     .reverse()

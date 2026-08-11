@@ -28,10 +28,14 @@ export async function unzip(buffer: ArrayBuffer): Promise<ZipEntry> {
   const view = new DataView(buffer)
   const entries: ZipEntry = {}
   let offset = 0
+  const minHeaderSize = 30 // Minimum ZIP local file header size
 
   while (offset < buffer.byteLength - 4 && Object.keys(entries).length < MAX_ENTRIES) {
     const sig = view.getUint32(offset, true)
     if (sig !== 0x04034b50) break
+
+    // Safety: skip if we can't read the minimal header
+    if (offset + minHeaderSize > buffer.byteLength) break
 
     const flags = view.getUint16(offset + 6, true)
     const compressionMethod = view.getUint16(offset + 8, true)
@@ -39,10 +43,15 @@ export async function unzip(buffer: ArrayBuffer): Promise<ZipEntry> {
     let uncompressedSize = view.getUint32(offset + 22, true)
     const filenameLen = view.getUint16(offset + 26, true)
     const extraLen = view.getUint16(offset + 28, true)
+
+    // Safety: validate that filename + extra fit in buffer
+    if (filenameLen > 65535 || extraLen > 65535) break
+    const dataStart = offset + 30 + filenameLen + extraLen
+    if (dataStart + compressedSize > buffer.byteLength) break
+
     const filename = new TextDecoder().decode(
       new Uint8Array(buffer, offset + 30, filenameLen),
     )
-    const dataStart = offset + 30 + filenameLen + extraLen
     const usesDataDescriptor = (flags & 0x8) !== 0
 
     if (usesDataDescriptor && compressedSize === 0 && uncompressedSize === 0) {

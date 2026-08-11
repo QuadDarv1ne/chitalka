@@ -129,17 +129,20 @@ export function Reader() {
       if (extra?.cfi !== undefined) setCurrentCfi(extra.cfi)
       if (extra?.textPosition !== undefined) setCurrentTextPosition(extra.textPosition)
       if (extra?.pdfPage !== undefined) setCurrentPdfPage(extra.pdfPage)
-      if (!book) return
-      await updateBook(book.id, {
+      // Use ref to avoid stale closure — prevents saving progress for
+      // the wrong book when the user switches books quickly.
+      const bookId = bookIdRef.current
+      if (!bookId) return
+      await updateBook(bookId, {
         progress: p,
-        cfi: extra?.cfi ?? book.cfi,
-        textPosition: extra?.textPosition ?? book.textPosition,
-        pdfPage: extra?.pdfPage ?? book.pdfPage,
-        audioTrack: extra?.audioTrack ?? book.audioTrack,
-        audioTime: extra?.audioTime ?? book.audioTime,
+        cfi: extra?.cfi,
+        textPosition: extra?.textPosition,
+        pdfPage: extra?.pdfPage,
+        audioTrack: extra?.audioTrack,
+        audioTime: extra?.audioTime,
       }).catch((e) => console.error('Progress save failed', e))
     },
-    [book],
+    [],
   )
 
   // Global keyboard shortcuts

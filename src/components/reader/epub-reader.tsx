@@ -102,6 +102,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
 
     // Track location changes
     const onLocated = (location: any) => {
+      if (disposed) return
       if (!location || !location.start) return
       const cfi = location.start.cfi
       const percent = location.start.percentage || 0

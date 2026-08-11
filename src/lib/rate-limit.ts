@@ -170,7 +170,15 @@ export function stopCleanupTimer(): void {
     cleanupTimer = null
   }
 }
-// Bootstrap in long-running environments, but allow manual control
-if (typeof globalThis !== 'undefined' && typeof setInterval !== 'undefined' && typeof process !== 'undefined' && !process.env.NEXT_RUNTIME?.startsWith('edge')) {
+
+// Bootstrap cleanup timer only in long-running Node environments.
+// Skip edge runtime and SSR (Next.js Node runtime) — serverless
+// instances don't need persistent timers since state is per-request.
+if (
+  typeof globalThis !== 'undefined' &&
+  typeof setInterval !== 'undefined' &&
+  typeof process !== 'undefined' &&
+  process.env.NEXT_RUNTIME === 'nodejs'
+) {
   startCleanupTimer()
 }

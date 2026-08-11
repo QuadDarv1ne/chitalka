@@ -31,12 +31,23 @@ interface LibraryDB extends DBSchema {
 }
 
 let dbPromise: Promise<IDBPDatabase<LibraryDB>> | null = null
+let openAttempts = 0
+const MAX_OPEN_ATTEMPTS = 3 // Prevent infinite retry loops on persistent failures
 
 function getDB() {
   if (typeof window === 'undefined') {
     throw new Error('IndexedDB only available in browser')
   }
   if (!dbPromise) {
+    // Limit retry attempts to avoid infinite loops when IndexedDB is
+    // persistently unavailable (quota exceeded, private mode, etc.).
+    openAttempts++
+    if (openAttempts > MAX_OPEN_ATTEMPTS) {
+      const err = new Error('IndexedDB: max open attempts exceeded')
+      console.error('IndexedDB open failed after retries', err)
+      throw err
+    }
+
     // Reset on failure so a transient open error (blocked upgrade, quota,
     // private-mode SecurityError) doesn't poison every later call until a
     // page reload — the next getDB() attempt starts a fresh open.
@@ -61,6 +72,8 @@ function getDB() {
       },
     }).catch((e) => {
       dbPromise = null
+      openAttempts++
+      console.warn('IndexedDB open failed (attempt', openAttempts, ')', e)
       throw e
     })
   }
@@ -135,6 +148,7 @@ export async function updateBook(
 /**
  * Reassign all books to a new userId (e.g. after login).
  * Useful when user had anonymous books and logs in.
+ * Uses write queues to prevent race conditions with concurrent updates.
  */
 export async function reassignBooksToUser(
   oldUserId: string | null | undefined,
@@ -143,8 +157,17 @@ export async function reassignBooksToUser(
   const db = await getDB()
   const all = await db.getAll('books')
   const toUpdate = all.filter((b) => (b.userId ?? null) === (oldUserId ?? null))
+  // Flush all pending writes before reassignment, then queue updates
+  const promises: Promise<void>[] = []
   for (const book of toUpdate) {
-    await db.put('books', { ...book, userId: newUserId })
+    const prev = writeQueues.get(book.id) ?? Promise.resolve()
+    const next = prev.then(async () => {
+      const updated = { ...book, userId: newUserId }
+      await db.put('books', updated)
+    })
+    writeQueues.set(book.id, next.catch(() => {}))
+    promises.push(next)
   }
+  await Promise.all(promises)
   return toUpdate.length
 }
