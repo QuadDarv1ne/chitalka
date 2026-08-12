@@ -18,6 +18,11 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
   const viewerRef = useRef<HTMLDivElement>(null)
   const bookRef = useRef<Book | null>(null)
   const renditionRef = useRef<Rendition | null>(null)
+  // Tracks whether display() finished for the CURRENT rendition instance.
+  // Unlike the `ready` state this survives StrictMode remounts, so the theme
+  // effect can never call resize() on a rendition whose manager (created
+  // inside epubjs start()) does not exist yet.
+  const renderedRef = useRef(false)
   const onProgressRef = useRef(onProgress)
   const [ready, setReady] = useState(false)
   const [hasPrev, setHasPrev] = useState(false)
@@ -61,6 +66,9 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
   useEffect(() => {
     if (!viewerRef.current) return
     let disposed = false
+    // Mark the new rendition as not-yet-rendered. The theme effect gates on
+    // this ref so it never calls resize() before display() completes.
+    renderedRef.current = false
 
     const blobUrl = URL.createObjectURL(book.blob)
     const epubBook = ePub(blobUrl)
@@ -92,7 +100,8 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
           logger.warn('EPUB: CFI invalid, opening from the start')
           await rendition.display()
         }
-        if (disposed) return
+if (disposed) return
+        renderedRef.current = true
         setReady(true)
         updateNavButtons()
       } catch (e) {
@@ -176,16 +185,19 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       URL.revokeObjectURL(blobUrl)
       bookRef.current = null
       renditionRef.current = null
+      renderedRef.current = false
     }
   }, [book.id])
 
   // Apply theme + font settings.
-  // Runs only after the rendition is ready (display() completed) — calling
-  // rendition.resize() earlier crashes inside epubjs because its internal
-  // views are not created until the first display().
+  // Runs only after the rendition is fully rendered (display() completed).
+  // Gated on renderedRef (not `ready`) because that ref is reset on every
+  // remount — epubjs creates this.manager only inside start(), and calling
+  // rendition.resize() before that throws "Cannot read properties of
+  // undefined (reading 'resize')".
   useEffect(() => {
     const rendition = renditionRef.current
-    if (!rendition || !ready) return
+    if (!rendition || !renderedRef.current) return
 
     try {
       const themes = rendition.themes
