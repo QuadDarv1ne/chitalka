@@ -179,41 +179,50 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
     }
   }, [book.id])
 
-  // Apply theme + font settings
+  // Apply theme + font settings.
+  // Runs only after the rendition is ready (display() completed) — calling
+  // rendition.resize() earlier crashes inside epubjs because its internal
+  // views are not created until the first display().
   useEffect(() => {
     const rendition = renditionRef.current
-    if (!rendition) return
+    if (!rendition || !ready) return
 
-    const themes = rendition.themes
-    const bg = themeBg[settings.theme]
-    const fg = themeFg[settings.theme]
+    try {
+      const themes = rendition.themes
+      if (!themes) return
 
-    themes.register('custom', {
-      body: {
-        background: bg,
-        color: fg,
-        'font-family': fontFamilyCss[settings.fontFamily],
-        'font-size': `${settings.fontSize}px`,
-        'line-height': `${settings.lineHeight}`,
-        padding: '0 !important',
-        margin: '0 !important',
-      },
-      p: {
-        'font-family': fontFamilyCss[settings.fontFamily],
-        'font-size': `${settings.fontSize}px`,
-        'line-height': `${settings.lineHeight}`,
-        'text-align': settings.textAlign,
-        'hyphens': settings.hyphens ? 'auto' : 'manual',
-      },
-      h1: { color: fg, 'font-family': fontFamilyCss[settings.fontFamily] },
-      h2: { color: fg, 'font-family': fontFamilyCss[settings.fontFamily] },
-      h3: { color: fg, 'font-family': fontFamilyCss[settings.fontFamily] },
-      a: { color: '#2563eb' },
-    })
-    themes.select('custom')
-    // Force re-render to apply
-    ;(rendition.resize as () => void)?.()
-  }, [settings.theme, settings.fontFamily, settings.fontSize, settings.lineHeight, settings.textAlign, settings.hyphens])
+      const bg = themeBg[settings.theme]
+      const fg = themeFg[settings.theme]
+
+      themes.register('custom', {
+        body: {
+          background: bg,
+          color: fg,
+          'font-family': fontFamilyCss[settings.fontFamily],
+          'font-size': `${settings.fontSize}px`,
+          'line-height': `${settings.lineHeight}`,
+          padding: '0 !important',
+          margin: '0 !important',
+        },
+        p: {
+          'font-family': fontFamilyCss[settings.fontFamily],
+          'font-size': `${settings.fontSize}px`,
+          'line-height': `${settings.lineHeight}`,
+          'text-align': settings.textAlign,
+          'hyphens': settings.hyphens ? 'auto' : 'manual',
+        },
+        h1: { color: fg, 'font-family': fontFamilyCss[settings.fontFamily] },
+        h2: { color: fg, 'font-family': fontFamilyCss[settings.fontFamily] },
+        h3: { color: fg, 'font-family': fontFamilyCss[settings.fontFamily] },
+        a: { color: '#2563eb' },
+      })
+      themes.select('custom')
+      // Force re-render to apply (resize with no args re-reads the container)
+      ;(rendition.resize as unknown as () => void)()
+    } catch (e) {
+      logger.warn('EPUB: failed to apply theme/settings', e)
+    }
+  }, [settings.theme, settings.fontFamily, settings.fontSize, settings.lineHeight, settings.textAlign, settings.hyphens, ready])
 
   return (
     <div
