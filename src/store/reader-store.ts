@@ -342,7 +342,7 @@ export const useReaderStore = create<ReaderState>()(
     }),
     {
       name: 'reader-store',
-      version: 2,
+      version: 3,
       partialize: (s) => ({
         settings: s.settings,
         bookmarks: s.bookmarks,
@@ -361,7 +361,7 @@ export const useReaderStore = create<ReaderState>()(
             next.settings.dailyGoalMinutes = 30
           }
         }
-        if (version <= 2) {
+        if (version < 3) {
           // v2 → v3: add notes array and readingSpeed
           if (!next?.notes) next.notes = []
           if (next?.settings && typeof next.settings.readingSpeed !== 'string') {
