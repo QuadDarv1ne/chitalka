@@ -6,6 +6,7 @@
 
 const LEVELS = ['silly', 'debug', 'info', 'warn', 'error'] as const
 type Level = (typeof LEVELS)[number]
+const isLevel = (value: string): value is Level => (LEVELS as readonly string[]).includes(value)
 
 const LEVEL_ORDER: Record<Level, number> = { silly: 0, debug: 1, info: 2, warn: 3, error: 4 }
 
@@ -22,6 +23,7 @@ const RESET = '\x1b[0m'
 const PROD_THRESHOLD = LEVEL_ORDER['info']
 
 function _log(level: Level, ...args: unknown[]) {
+  if (!isLevel(level)) return
   const threshold = process.env.NODE_ENV === 'production' ? PROD_THRESHOLD : 0
   if (LEVEL_ORDER[level] < threshold) return
 
@@ -30,12 +32,9 @@ function _log(level: Level, ...args: unknown[]) {
     ? `${COLORS[level]}[${level.toUpperCase()}]${RESET} ${ts} `
     : `${level.toUpperCase()} ${ts} `
 
-  const fn = level === 'error' ? console.error : console.warn
-  if (level === 'info' || level === 'debug' || level === 'silly') {
-    console[level](prefix, ...args)
-  } else {
-    fn(prefix, ...args)
-  }
+  if (level === 'error') console.error(prefix, ...args)
+  else if (level === 'warn') console.warn(prefix, ...args)
+  else console.log(prefix, ...args)
 }
 
 export const logger = {

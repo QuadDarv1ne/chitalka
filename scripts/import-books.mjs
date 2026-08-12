@@ -38,7 +38,7 @@ function fetchJSON(url) {
         try {
           resolve(JSON.parse(data))
         } catch (e) {
-          reject(new Error(`JSON parse error: ${data.slice(0, 200)}`))
+          reject(new Error(`JSON parse error: ${e.message} (${data.slice(0, 200)})`))
         }
       })
     }).on('error', reject)
@@ -50,6 +50,7 @@ function downloadFile(url, destPath) {
     const client = url.startsWith('https') ? https : http
     client.get(url, (res) => {
       if (res.statusCode >= 400) {
+        res.resume()
         return reject(new Error(`HTTP ${res.statusCode}`))
       }
       const ws = fs.createWriteStream(destPath)
@@ -57,6 +58,14 @@ function downloadFile(url, destPath) {
       ws.on('finish', () => {
         ws.close()
         resolve()
+      })
+      ws.on('error', (e) => {
+        fs.unlink(destPath, () => {})
+        reject(e)
+      })
+      res.on('error', (e) => {
+        fs.unlink(destPath, () => {})
+        reject(e)
       })
     }).on('error', (e) => {
       fs.unlink(destPath, () => {})
@@ -135,6 +144,8 @@ async function main() {
         if (!fs.existsSync(tempPath)) {
           throw new Error('File not downloaded')
         }
+      } else {
+        skipped++
       }
 
       // Parse metadata based on format
@@ -176,7 +187,9 @@ async function main() {
   }
 
   // Cleanup temp
-  try { fs.rmSync(tempDir, { recursive: true, force: true }) } catch {}
+  try { fs.rmSync(tempDir, { recursive: true, force: true }) } catch (e) {
+    console.warn(`⚠️ Temp cleanup failed: ${e.message}`)
+  }
 
   // 3. Save metadata
   const output = {
