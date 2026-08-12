@@ -155,12 +155,27 @@ export function localDateString(d: Date): string {
 function mergeSettings(partial: Partial<ReaderSettings> | null | undefined): ReaderSettings {
   const base = { ...defaultSettings }
   if (partial && typeof partial === 'object') {
-    for (const key of Object.keys(defaultSettings) as (keyof ReaderSettings)[]) {
-      const v = (partial as Record<string, unknown>)[key]
-      if (v !== undefined && v !== null) {
-        ;(base as Record<string, unknown>)[key] = v
-      }
+    const raw = partial as Record<string, unknown>
+    // Validate enumerated values explicitly so corrupted localStorage
+    // (or an older/newer build) can never inject invalid settings.
+    if (['light', 'dark', 'sepia', 'contrast'].includes(String(raw.theme))) base.theme = raw.theme as Theme
+    if (['serif', 'sans', 'mono'].includes(String(raw.fontFamily))) base.fontFamily = raw.fontFamily as FontFamily
+    if (['left', 'justify'].includes(String(raw.textAlign))) base.textAlign = raw.textAlign as 'left' | 'justify'
+    if (['slow', 'normal', 'fast', 'very-fast'].includes(String(raw.readingSpeed))) base.readingSpeed = raw.readingSpeed as ReadingSpeed
+    // Numeric ranges
+    const clamp = (v: unknown, min: number, max: number, fallback: number): number => {
+      const n = Number(v)
+      return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback
     }
+    base.fontSize = clamp(raw.fontSize, 12, 28, defaultSettings.fontSize)
+    base.lineHeight = Math.round(clamp(raw.lineHeight, 1.2, 2.4, defaultSettings.lineHeight) * 10) / 10
+    base.margin = clamp(raw.margin, 1, 6, defaultSettings.margin)
+    base.ttsRate = Math.round(clamp(raw.ttsRate, 0.5, 2.0, defaultSettings.ttsRate) * 10) / 10
+    base.dailyGoalMinutes = clamp(raw.dailyGoalMinutes, 5, 240, defaultSettings.dailyGoalMinutes)
+    // Booleans
+    if (typeof raw.hyphens === 'boolean') base.hyphens = raw.hyphens
+    // Strings
+    if (typeof raw.ttsVoice === 'string' && raw.ttsVoice) base.ttsVoice = raw.ttsVoice.slice(0, 300)
   }
   return base
 }

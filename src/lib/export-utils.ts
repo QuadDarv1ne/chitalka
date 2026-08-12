@@ -76,6 +76,51 @@ export function exportHighlightsToMarkdown(
 }
 
 /**
+ * Export book notes as a Markdown file and trigger download.
+ */
+export function exportNotesToMarkdown(
+  book: BookRecord,
+  notes: BookNote[],
+): void {
+  if (notes.length === 0) return
+
+  const sorted = [...notes].sort((a, b) => a.createdAt - b.createdAt)
+  const lines: string[] = []
+  lines.push(`# Заметки — ${book.title}`)
+  lines.push('')
+  lines.push(`**Автор:** ${book.author}`)
+  lines.push(`**Формат:** ${book.format.toUpperCase()}`)
+  lines.push(`**Всего заметок:** ${sorted.length}`)
+  lines.push(`**Экспортировано:** ${new Date().toLocaleString('ru-RU')}`)
+  lines.push('')
+  lines.push('---')
+  lines.push('')
+
+  for (let i = 0; i < sorted.length; i++) {
+    const n = sorted[i]
+    lines.push(`## Заметка ${i + 1}`)
+    lines.push('')
+    lines.push(n.text)
+    lines.push('')
+    lines.push(`*Добавлено: ${new Date(n.createdAt).toLocaleString('ru-RU')}*`)
+    lines.push('')
+    lines.push('---')
+    lines.push('')
+  }
+
+  const content = lines.join('\n')
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${book.title.replace(/[^\wа-яА-ЯёЁ\s-]/g, '').trim().replace(/\s+/g, '_')} - zametki.md`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/**
  * Export all library data (without blobs) as JSON.
  */
 export async function exportLibraryBackup(

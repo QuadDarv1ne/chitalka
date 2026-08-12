@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from 'react'
 import { Star } from 'lucide-react'
-import { useReaderStore } from '@/store/reader-store'
 import { updateBook } from '@/lib/library'
 import { toast } from 'sonner'
 
@@ -13,7 +12,6 @@ interface Props {
 
 export function BookRating({ bookId, currentRating = 0 }: Props) {
   const [hoverRating, setHoverRating] = useState(0)
-  const setView = useReaderStore((s) => s.setView)
 
   const handleRate = useCallback(
     async (rating: number) => {

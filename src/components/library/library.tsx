@@ -50,6 +50,8 @@ import {
   parseAudioMeta,
 } from '@/lib/book-parser'
 import { useReaderStore, type Theme } from '@/store/reader-store'
+import { getWordsPerMinute } from '@/store/reader-store'
+import { estimateRemainingMinutes, formatMinutes } from '@/lib/constants'
 import { useAuth } from '@/hooks/use-auth'
 import { useBookSync } from '@/hooks/use-book-sync'
 import { toast } from 'sonner'
@@ -657,6 +659,11 @@ const ContinueReadingCard = memo(function ContinueReadingCard({
   onClick: () => void
 }) {
   const progress = book.progress ?? 0
+  const readingSpeed = useReaderStore((s) => s.settings.readingSpeed)
+  const wpm = getWordsPerMinute(readingSpeed)
+  const remaining = estimateRemainingMinutes(book.format, book.size, progress, wpm)
+  const remainingLabel = formatMinutes(remaining)
+
   return (
     <button
       onClick={onClick}
@@ -689,6 +696,11 @@ const ContinueReadingCard = memo(function ContinueReadingCard({
             {Math.round(progress * 100)}%
           </span>
         </div>
+        {remainingLabel && (
+          <p className="mt-1 text-xs text-muted-foreground/80">
+            Осталось: {remainingLabel}
+          </p>
+        )}
       </div>
     </button>
   )

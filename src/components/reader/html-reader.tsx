@@ -82,6 +82,7 @@ export function HtmlReader({ book, onProgress }: Props) {
     if (totalPages === 0 || positionRestoredRef.current) return
     if (book.textPosition) {
       positionRestoredRef.current = true
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPage(findPageForPosition(book.textPosition))
     }
   }, [totalPages, book.textPosition, findPageForPosition])

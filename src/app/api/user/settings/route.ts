@@ -8,6 +8,7 @@ import { readJsonBody } from '@/lib/http'
 const VALID_THEMES = ['light', 'dark', 'sepia', 'contrast']
 const VALID_FONTS = ['serif', 'sans', 'mono']
 const VALID_ALIGN = ['left', 'justify']
+const VALID_SPEEDS = ['slow', 'normal', 'fast', 'very-fast']
 
 export async function GET() {
   try {
@@ -27,7 +28,7 @@ export async function GET() {
       return NextResponse.json({ settings: null, exists: false })
     }
 
-    return NextResponse.json({
+return NextResponse.json({
       exists: true,
       settings: {
         theme: settings.theme,
@@ -40,6 +41,7 @@ export async function GET() {
         ttsRate: settings.ttsRate,
         ttsVoice: settings.ttsVoice,
         dailyGoalMinutes: settings.dailyGoalMinutes,
+        readingSpeed: settings.readingSpeed,
       },
     })
   } catch (e) {
@@ -61,10 +63,11 @@ export async function PUT(req: Request) {
     const body = await readJsonBody<{
       theme?: unknown, fontFamily?: unknown, fontSize?: unknown, lineHeight?: unknown, margin?: unknown,
       textAlign?: unknown, hyphens?: unknown, ttsRate?: unknown, ttsVoice?: unknown, dailyGoalMinutes?: unknown,
+      readingSpeed?: unknown,
     }>(req, 64 * 1024)
     const {
       theme, fontFamily, fontSize, lineHeight, margin,
-      textAlign, hyphens, ttsRate, ttsVoice, dailyGoalMinutes,
+      textAlign, hyphens, ttsRate, ttsVoice, dailyGoalMinutes, readingSpeed,
     } = body ?? {}
 
     // Validate
@@ -124,12 +127,18 @@ export async function PUT(req: Request) {
     if (ttsVoice !== undefined) {
       data.ttsVoice = ttsVoice === null ? null : String(ttsVoice).slice(0, 300)
     }
-    if (dailyGoalMinutes !== undefined) {
+if (dailyGoalMinutes !== undefined) {
       const n = Number(dailyGoalMinutes)
       if (!Number.isFinite(n) || n < 5 || n > 240) {
         return NextResponse.json({ error: 'Цель 5-240 мин' }, { status: 400 })
       }
       data.dailyGoalMinutes = n
+    }
+    if (readingSpeed !== undefined) {
+      if (typeof readingSpeed !== 'string' || !VALID_SPEEDS.includes(readingSpeed)) {
+        return NextResponse.json({ error: 'Некорректная скорость чтения' }, { status: 400 })
+      }
+      data.readingSpeed = readingSpeed
     }
 
     const updated = await db.userSettings.upsert({
@@ -138,7 +147,7 @@ export async function PUT(req: Request) {
       update: data,
     })
 
-    return NextResponse.json({
+return NextResponse.json({
       settings: {
         theme: updated.theme,
         fontFamily: updated.fontFamily,
@@ -150,6 +159,7 @@ export async function PUT(req: Request) {
         ttsRate: updated.ttsRate,
         ttsVoice: updated.ttsVoice,
         dailyGoalMinutes: updated.dailyGoalMinutes,
+        readingSpeed: updated.readingSpeed,
       },
     })
   } catch (e) {

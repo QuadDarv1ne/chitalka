@@ -2,12 +2,12 @@
 
 import { useState, useMemo, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Trash2, Plus, Edit3, Save, X } from 'lucide-react'
-import { useReaderStore, type BookNote } from '@/store/reader-store'
+import { Trash2, Plus, Edit3, Save, X, Download } from 'lucide-react'
+import { useReaderStore } from '@/store/reader-store'
 import { toast } from 'sonner'
 import type { BookRecord } from '@/lib/library'
+import { exportNotesToMarkdown } from '@/lib/export-utils'
 
 interface Props {
   book: BookRecord
@@ -55,21 +55,40 @@ export function NotesPanel({ book }: Props) {
     [removeNote],
   )
 
+  const handleExport = useCallback(() => {
+    if (bookNotes.length === 0) return
+    exportNotesToMarkdown(book, bookNotes)
+    toast.success('Заметки экспортированы в Markdown')
+  }, [book, bookNotes])
+
   return (
     <div className="flex flex-col h-full">
       {/* Add note form */}
       <div className="space-y-2 p-3 border-b">
-        <Textarea
-          value={editText}
-          onChange={(e) => setEditText(e.target.value)}
-          placeholder="Добавить заметку..."
-          className="min-h-[80px] text-sm resize-none"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-              addNewNote()
-            }
-          }}
-        />
+        <div className="flex items-start gap-2">
+          <Textarea
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            placeholder="Добавить заметку..."
+            className="min-h-[80px] text-sm resize-none flex-1"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                addNewNote()
+              }
+            }}
+          />
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={handleExport}
+            disabled={bookNotes.length === 0}
+            className="flex-shrink-0"
+            aria-label="Экспортировать заметки в Markdown"
+            title="Экспортировать в Markdown"
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+        </div>
         <div className="flex gap-2">
           {editingId ? (
             <>

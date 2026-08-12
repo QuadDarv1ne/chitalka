@@ -38,6 +38,7 @@ model UserSettings {
   ttsRate      Float    @default(1.0)
   ttsVoice     String?
   dailyGoalMinutes Int  @default(30)
+  readingSpeed String   @default("normal")
   updatedAt    DateTime @updatedAt
 }
 

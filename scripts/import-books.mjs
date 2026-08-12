@@ -14,9 +14,16 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const BASE_URL = 'http://localhost:3000'
+const BASE_URL = 'http://127.0.0.1:3000'
 const BOOKS_DIR = path.join(__dirname, '..', 'books')
 const OUTPUT_FILE = path.join(__dirname, '..', 'import-metadata.json')
+
+// Demo account used only to authorize the collection API calls.
+// The script downloads the book files from the server into the local
+// books/ folder (if missing) — the actual IndexedDB import happens in
+// the browser via the "Коллекция" button.
+const DEMO_EMAIL = 'demo@reader.local'
+const DEMO_PASSWORD = 'DemoPass123!'
 
 const FORMAT_LABELS = {
   epub: 'EPUB',
@@ -28,27 +35,78 @@ const FORMAT_LABELS = {
   mp3: 'Аудиокнига',
 }
 
-function fetchJSON(url) {
+/** Minimal cookie jar for Node http/https requests. */
+let cookieHeader = ''
+
+function request(url, { method = 'GET', body = null, headers = {} } = {}) {
   return new Promise((resolve, reject) => {
-    const client = url.startsWith('https') ? https : http
-    client.get(url, (res) => {
+    const u = new URL(url)
+    const client = u.protocol === 'https:' ? https : http
+    const options = {
+      method,
+      hostname: u.hostname,
+      port: u.port,
+      path: u.pathname + u.search,
+      headers: { ...headers },
+    }
+    if (cookieHeader) options.headers.Cookie = cookieHeader
+    const req = client.request(options, (res) => {
+      const setCookie = res.headers['set-cookie']
+      if (setCookie) {
+        cookieHeader = setCookie
+          .map((c) => c.split(';')[0])
+          .join('; ')
+      }
       let data = ''
       res.on('data', (chunk) => (data += chunk))
       res.on('end', () => {
-        try {
-          resolve(JSON.parse(data))
-        } catch (e) {
-          reject(new Error(`JSON parse error: ${e.message} (${data.slice(0, 200)})`))
-        }
+        let parsed = null
+        try { parsed = JSON.parse(data) } catch { /* not JSON */ }
+        resolve({ status: res.statusCode, data, parsed, headers: res.headers })
       })
-    }).on('error', reject)
+    })
+    req.on('error', reject)
+    if (body) req.write(body)
+    req.end()
   })
+}
+
+/** Register (or log into) the demo account and keep the session cookie. */
+async function authenticate() {
+  let res = await request(`${BASE_URL}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: DEMO_EMAIL, password: DEMO_PASSWORD }),
+  })
+  if (res.status === 200) {
+    console.log('✓ Logged in as', DEMO_EMAIL)
+    return true
+  }
+  res = await request(`${BASE_URL}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: DEMO_EMAIL, password: DEMO_PASSWORD, name: 'Demo' }),
+  })
+  if (res.status === 200) {
+    console.log('✓ Registered demo account:', DEMO_EMAIL)
+    return true
+  }
+  console.error('✗ Auth failed:', res.status, res.data?.slice(0, 200))
+  return false
 }
 
 function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
-    const client = url.startsWith('https') ? https : http
-    client.get(url, (res) => {
+    const u = new URL(url)
+    const client = u.protocol === 'https:' ? https : http
+    const options = {
+      hostname: u.hostname,
+      port: u.port,
+      path: u.pathname + u.search,
+      headers: {},
+    }
+    if (cookieHeader) options.headers.Cookie = cookieHeader
+    client.get(options, (res) => {
       if (res.statusCode >= 400) {
         res.resume()
         return reject(new Error(`HTTP ${res.statusCode}`))
@@ -106,9 +164,22 @@ function parseAudioMeta(filename) {
 async function main() {
   console.log('📚 Importing books from collection...\n')
 
+  // 0. Authenticate so the collection API is accessible
+  console.log('🔐 Authenticating...')
+  const authed = await authenticate()
+  if (!authed) {
+    console.error('❌ Cannot access collection API without authentication.')
+    process.exit(1)
+  }
+
   // 1. Get manifest
   console.log('📋 Loading manifest...')
-  const manifest = await fetchJSON(`${BASE_URL}/api/books/manifest`)
+  const manifestRes = await request(`${BASE_URL}/api/books/manifest`)
+  if (manifestRes.status !== 200) {
+    console.error(`❌ Manifest request failed: ${manifestRes.status}`)
+    process.exit(1)
+  }
+  const manifest = manifestRes.parsed || { files: [] }
   const files = manifest.files || []
 
   if (files.length === 0) {

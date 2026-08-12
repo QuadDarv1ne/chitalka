@@ -9,6 +9,7 @@ const VALID_FORMATS = ['epub', 'fb2', 'pdf', 'txt', 'md', 'html', 'mp3']
 const VALID_THEMES = ['light', 'dark', 'sepia', 'contrast']
 const VALID_FONTS = ['serif', 'sans', 'mono']
 const VALID_ALIGN = ['left', 'justify']
+const VALID_SPEEDS = ['slow', 'normal', 'fast', 'very-fast']
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const n = Number(value)
@@ -91,6 +92,7 @@ export async function POST(req: Request) {
       if (Number.isFinite(Number(s.ttsRate))) settingsData.ttsRate = clampNumber(s.ttsRate, 0.5, 2, 1)
       if (s.ttsVoice === null || typeof s.ttsVoice === 'string') settingsData.ttsVoice = s.ttsVoice
       if (Number.isFinite(Number(s.dailyGoalMinutes))) settingsData.dailyGoalMinutes = clampNumber(s.dailyGoalMinutes, 5, 240, 30)
+      if (typeof s.readingSpeed === 'string' && VALID_SPEEDS.includes(s.readingSpeed)) settingsData.readingSpeed = s.readingSpeed
 
       if (Object.keys(settingsData).length > 0) {
         await db.userSettings.upsert({
