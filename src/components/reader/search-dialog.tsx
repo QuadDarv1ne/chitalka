@@ -146,7 +146,11 @@ export function SearchDialog({ book }: Props) {
             if (searchSeqRef.current !== seq) return
             const page = await doc.getPage(i)
             const content = await page.getTextContent()
-            const text = content.items.map((it: any) => it.str).join(' ')
+            // pdfjs-dist v6: getTextContent returns items array with TextItem objects
+            const text = content.items
+              .filter((item: any): item is { str: string } => 'str' in item)
+              .map((item) => item.str)
+              .join(' ')
             const lower = text.toLowerCase()
             const idx = lower.indexOf(q)
             if (idx !== -1) {

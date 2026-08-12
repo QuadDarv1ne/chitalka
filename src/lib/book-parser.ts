@@ -75,7 +75,11 @@ export async function parseEpubMeta(
 
 async function readText(data?: Uint8Array): Promise<string | null> {
   if (!data) return null
-  return new TextDecoder('utf-8').decode(data)
+  // Use decodeTextBytes to handle BOM, XML encoding declarations,
+  // and fallback from UTF-8 to windows-1251 for Russian legacy files
+  // Create a clean ArrayBuffer view to avoid SharedArrayBuffer issues
+  const buffer = new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+  return decodeTextBytes(buffer.buffer as ArrayBuffer)
 }
 
 function extractOpfPath(containerXml: string): string | null {
@@ -379,7 +383,8 @@ export function parseAudioMeta(filename: string): ParsedBook {
     author = dotSpace[1].replace(/_/g, ' ').trim()
     title = dotSpace[2].replace(/_/g, ' ').trim()
   } else {
-    const underscore = base.match(/^([A-Za-zА-Яа-яЁё\s]+?)_(.+)$/)
+    // Support Cyrillic characters in names
+    const underscore = base.match(/^([А-Яа-яЁёA-Za-z\s\p{L}]+?)_(.+)$/u)
     if (underscore) {
       author = underscore[1].trim()
       title = underscore[2].replace(/_/g, ' ').trim()
