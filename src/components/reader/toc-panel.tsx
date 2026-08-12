@@ -131,7 +131,8 @@ export function TocPanel({ book, onNavigate }: Props) {
         } catch (e) {
           logger.error(e)
         } finally {
-          doc?.destroy().catch(() => {})
+          // pdfjs-dist v6+ destroy() returns Promise<void> — fire-and-forget
+          doc?.destroy?.()
         }
       } else {
         // For text/markdown/fb2, generate TOC from headings
