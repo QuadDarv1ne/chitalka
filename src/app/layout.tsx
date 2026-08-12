@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ResetPasswordWatcher } from "@/components/auth/reset-password-watcher";
 import { VerifyEmailWatcher } from "@/components/auth/verify-email-watcher";
+import { PwaSetup } from "@/components/pwa/pwa-setup";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,6 +26,7 @@ export const metadata: Metadata = {
   keywords: ["читалка", "epub", "fb2", "pdf", "txt", "книги", "reader"],
   icons: {
     icon: "/logo.svg",
+    apple: "/logo.svg",
   },
   openGraph: {
     title: "Читалка — удобная читалка книг",
@@ -52,6 +54,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
+        <PwaSetup />
         <AuthProvider>
           <ThemeProvider>{children}</ThemeProvider>
           <Suspense fallback={null}>

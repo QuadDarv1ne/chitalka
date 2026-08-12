@@ -13,6 +13,8 @@ import {
   Loader2,
   Keyboard,
   StickyNote,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react'
 import { useReaderStore } from '@/store/reader-store'
 import { getBook, updateBook, flushBookWrites, type BookRecord } from '@/lib/library'
@@ -58,6 +60,7 @@ export function Reader() {
   const [progress, setProgress] = useState(0)
   const [activeTab, setActiveTab] = useState<SidebarTab>('toc')
   const [helpOpen, setHelpOpen] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
   // Position state fills in after the book loads (useState(book?.x) only
   // sees book===null on first render)
   const [currentCfi, setCurrentCfi] = useState<string | undefined>(undefined)
@@ -149,6 +152,26 @@ export function Reader() {
     [],
   )
 
+  // Fullscreen reading mode. Uses the browser Fullscreen API so the OS-level
+  // chrome (tab bar, scrollbars) also disappears — a real immersive view.
+  const toggleFullscreen = useCallback(() => {
+    if (typeof document === 'undefined') return
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {})
+    } else {
+      document.documentElement.requestFullscreen().catch(() => {
+        // Fullscreen API can be rejected (e.g. permissions) — ignore quietly
+      })
+    }
+  }, [])
+
+  // Track the real fullscreen state (user can exit via Esc / F11 too)
+  useEffect(() => {
+    const onFsChange = () => setFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+
   // Global keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -162,6 +185,8 @@ export function Reader() {
         window.dispatchEvent(new CustomEvent('reader:add-bookmark'))
         setBookmarksOpen(true)
         setActiveTab('bookmarks')
+      } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
+        toggleFullscreen()
       } else if (e.key === '?') {
         setHelpOpen(true)
       } else if (e.key === 'Escape') {
@@ -225,7 +250,8 @@ export function Reader() {
 
   return (
     <div className="relative flex min-h-screen flex-col">
-      {/* Top Bar */}
+      {/* Top Bar — hidden in fullscreen for immersive reading */}
+      {!fullscreen && (
       <header
         className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-3 backdrop-blur"
         style={{ background: 'color-mix(in srgb, var(--reader-bg) 88%, transparent)' }}
@@ -307,6 +333,16 @@ export function Reader() {
           <Button
             variant="ghost"
             size="icon"
+            onClick={toggleFullscreen}
+            aria-label={fullscreen ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим'}
+            title={fullscreen ? 'Выйти из полноэкранного режима (F)' : 'Полноэкранный режим (F)'}
+            className="hidden sm:flex"
+          >
+            {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setHelpOpen(true)}
             aria-label="Горячие клавиши"
             title="Горячие клавиши (?)"
@@ -316,8 +352,9 @@ export function Reader() {
           </Button>
         </div>
       </header>
+      )}
 
-      {/* Reader body */}
+{/* Reader body */}
       <div className="flex-1">
         {book.format === 'epub' ? (
           <EpubReader book={book} onProgress={handleProgressChange} />
@@ -332,7 +369,22 @@ export function Reader() {
         )}
       </div>
 
-      {/* Bottom progress bar */}
+      {/* Floating exit-fullscreen button */}
+      {fullscreen && (
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={toggleFullscreen}
+          className="fixed right-4 top-4 z-50 h-10 w-10 rounded-full shadow-lg"
+          aria-label="Выйти из полноэкранного режима"
+          title="Выйти из полноэкранного режима (F)"
+        >
+          <Minimize2 className="h-4 w-4" />
+        </Button>
+      )}
+
+{/* Bottom progress bar — hidden in fullscreen for immersive reading */}
+      {!fullscreen && (
       <footer
         className="sticky bottom-0 z-30 flex h-12 items-center gap-3 border-t px-4 backdrop-blur"
         style={{ background: 'color-mix(in srgb, var(--reader-bg) 88%, transparent)' }}
@@ -362,6 +414,7 @@ export function Reader() {
           ?
         </Button>
       </footer>
+      )}
 
       {/* Settings Sheet */}
       <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
