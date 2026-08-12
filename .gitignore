@@ -22,8 +22,10 @@ server.log
 # download folder
 download/
 
-# local book library data (keep on disk, do not upload to GitHub)
-books/
+# Large audiobook archives (>100MB GitHub limit)
+books/Nil_donald_uolsh_razgovor_s_bogom_opyit_obsheniya_chelovechestva_s_vyissheyi_siloyi.mp3.zip
+books/Protoiereyi_aleksandr_men_syin_chelovecheskiyi.mp3.zip
+books/Rayian_holideyi_stoicizm_na_kajdyiyi_den_366_razmyishleniyi_o_mudrosti_vole_i_iskusstve_jit.mp3.zip
 
 # pdf.js worker (copied from node_modules during postinstall)
 /public/pdf.worker.min.mjs
