@@ -242,10 +242,14 @@ export function HtmlReader({ book, onProgress }: Props) {
             paddingRight: `${settings.margin * 1.5}rem`,
           }}
         >
-          {/* Render HTML in an iframe for isolation */}
+          {/* Render HTML in an iframe for isolation.
+              sandbox="allow-scripts" + opaque origin: the book's own <script>
+              tags still render/interact, but cannot reach cookies, IndexedDB,
+              the parent window or same-origin /api/* endpoints. */}
           <iframe
             ref={frameRef}
             title={book.title}
+            sandbox="allow-scripts"
             srcDoc={buildPageHtml(currentPage, settings, pageHighlights)}
             className="w-full"
             style={{

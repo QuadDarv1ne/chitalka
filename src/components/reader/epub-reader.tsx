@@ -212,7 +212,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
     })
     themes.select('custom')
     // Force re-render to apply
-    ;(rendition.resize as any)?.()
+    ;(rendition.resize as () => void)?.()
   }, [settings.theme, settings.fontFamily, settings.fontSize, settings.lineHeight, settings.textAlign, settings.hyphens])
 
   return (

@@ -7,6 +7,8 @@ import { applyRateLimit } from '@/lib/rate-limit'
 import { readJsonBody } from '@/lib/http'
 import { cookies } from 'next/headers'
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 export async function POST(req: Request) {
   try {
     // Rate limit: 10 attempts / 15 min
@@ -33,9 +35,17 @@ export async function POST(req: Request) {
       )
     }
 
+    const normalizedEmail = email.toLowerCase().trim()
+    if (!EMAIL_RE.test(normalizedEmail)) {
+      // Same error message to prevent email enumeration
+      return NextResponse.json(
+        { error: 'Неверный email или пароль' },
+        { status: 400 },
+      )
+    }
+
     const remember = rememberMe === true
 
-    const normalizedEmail = email.toLowerCase().trim()
     const user = await db.user.findUnique({
       where: { email: normalizedEmail },
     })

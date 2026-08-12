@@ -178,7 +178,8 @@ if (
   typeof globalThis !== 'undefined' &&
   typeof setInterval !== 'undefined' &&
   typeof process !== 'undefined' &&
-  process.env.NEXT_RUNTIME === 'nodejs'
+  process.env.NEXT_RUNTIME === 'nodejs' &&
+  typeof window === 'undefined'
 ) {
   startCleanupTimer()
 }

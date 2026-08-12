@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/session'
 import { applyRateLimit } from '@/lib/rate-limit'
-import { readJsonBody } from '@/lib/http'
+import { readJsonBody, toDate } from '@/lib/http'
 
 /**
  * POST /api/books/sync — sync local book metadata to server
@@ -49,11 +49,8 @@ export async function POST(req: Request) {
 
       const bookId = raw.bookId.slice(0, 200)
       if (!bookId) continue
-      const lastOpenedAt =
-        typeof raw.lastOpenedAt === 'string' || raw.lastOpenedAt instanceof Date
-          ? new Date(raw.lastOpenedAt)
-          : null
-      if (lastOpenedAt && Number.isNaN(lastOpenedAt.getTime())) continue
+      const lastOpenedAt = toDate(raw.lastOpenedAt)
+      if (lastOpenedAt === null && raw.lastOpenedAt !== null && raw.lastOpenedAt !== undefined) continue
 
       const data = {
         userId: user.id,

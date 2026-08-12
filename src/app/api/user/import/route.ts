@@ -3,9 +3,9 @@ import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/session'
-import { readJsonBody } from '@/lib/http'
+import { readJsonBody, toDate } from '@/lib/http'
 
-const VALID_FORMATS = ['epub', 'fb2', 'pdf', 'txt', 'md', 'html']
+const VALID_FORMATS = ['epub', 'fb2', 'pdf', 'txt', 'md', 'html', 'mp3']
 const VALID_THEMES = ['light', 'dark', 'sepia', 'contrast']
 const VALID_FONTS = ['serif', 'sans', 'mono']
 const VALID_ALIGN = ['left', 'justify']
@@ -52,11 +52,8 @@ export async function POST(req: Request) {
 
       const format = VALID_FORMATS.includes(book.format) ? book.format : 'txt'
       const progress = clampNumber(book.progress, 0, 1, 0)
-      const lastOpenedAt =
-        typeof book.lastOpenedAt === 'string' || book.lastOpenedAt instanceof Date
-          ? new Date(book.lastOpenedAt)
-          : null
-      if (lastOpenedAt && Number.isNaN(lastOpenedAt.getTime())) continue
+      const lastOpenedAt = toDate(book.lastOpenedAt)
+      if (book.lastOpenedAt !== null && book.lastOpenedAt !== undefined && !lastOpenedAt) continue
 
       await db.bookMeta.upsert({
         where: { userId_bookId: { userId: user.id, bookId } },

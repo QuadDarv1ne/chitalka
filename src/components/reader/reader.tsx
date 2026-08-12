@@ -155,8 +155,8 @@ export function Reader() {
         setSearchOpen(true)
       } else if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
         e.preventDefault()
-        // Add bookmark at current position - just dispatch
-        toast.info('Используйте панель закладок для добавления')
+        // Dispatch a custom event so any reader can add a bookmark at current position
+        window.dispatchEvent(new CustomEvent('reader:add-bookmark'))
         setBookmarksOpen(true)
         setActiveTab('bookmarks')
       } else if (e.key === '?') {
@@ -168,6 +168,30 @@ export function Reader() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [setSearchOpen, setBookmarksOpen])
+
+  // Ctrl+B bookmark handler — saves the current position like the panel button does
+  useEffect(() => {
+    const onAddBookmark = () => {
+      if (!book) return
+      const { bookmarks, addBookmark } = useReaderStore.getState()
+      const marks = bookmarks.filter((m) => m.bookId === book.id)
+      addBookmark({
+        bookId: book.id,
+        cfi: currentCfi ?? book.cfi,
+        textPosition: currentTextPosition ?? book.textPosition,
+        pdfPage: currentPdfPage ?? book.pdfPage,
+        label: `Закладка ${marks.length + 1} · ${new Date().toLocaleString('ru-RU', {
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        })}`,
+      })
+      toast.success('Закладка добавлена')
+    }
+    window.addEventListener('reader:add-bookmark', onAddBookmark)
+    return () => window.removeEventListener('reader:add-bookmark', onAddBookmark)
+  }, [book, currentCfi, currentTextPosition, currentPdfPage])
 
   if (loading) {
     return (

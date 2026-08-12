@@ -73,8 +73,6 @@ export async function POST(req: Request) {
         },
       })
 
-      resetLink = `${getAppBaseUrl(req)}/?reset=${token}`
-
       const escapedName = escapeHtml(user.name || '')
       const html = `
         <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
@@ -116,6 +114,8 @@ ${resetLink}
 Ссылка действительна 1 час. Если вы не запрашивали сброс пароля — просто проигнорируйте это письмо.`
 
       try {
+        resetLink = `${getAppBaseUrl(req)}/?reset=${token}`
+
         await sendEmail({
           to: normalizedEmail,
           subject: 'Восстановление пароля — Читалка',

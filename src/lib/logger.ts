@@ -16,7 +16,7 @@ const COLORS: Record<Level, string> = {
   info: '\x1b[38;5;34m',
   warn: '\x1b[38;5;220m',
   error: '\x1b[38;5;196m',
-}
+} as const
 const RESET = '\x1b[0m'
 
 // Production threshold: only info, warn, error

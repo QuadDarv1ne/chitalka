@@ -92,7 +92,8 @@ bun run start
    его в `https://git.amvera.ru/<user>/<project>.git`.
 2. В разделе «Настройки» добавьте бесплатное доменное имя:
    `https://<project>.<user>.amvera.io`.
-3. В разделе «Переменные и секреты» задайте:
+3. В разделе «Переменные и секреты» задайте (оба обязательны — без них
+   вход/регистрация будут отключены с ошибкой в логах):
    - `JWT_SECRET` — `openssl rand -hex 32`
    - `NEXT_PUBLIC_APP_URL` — `https://<project>.<user>.amvera.io`
 4. Запустите сборку. Приложение слушает порт 3000, на старте автоматически
@@ -111,6 +112,10 @@ DATABASE_URL="file:./db/custom.db"
 JWT_SECRET="your-32-char-secret-here-change-in-production"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
+
+В production `JWT_SECRET` и `NEXT_PUBLIC_APP_URL` строго обязательны
+(в `src/lib/auth.ts` и `src/lib/url.ts` фолбэков нет — работа с аккаунтами
+отключается, а не деградирует до небезопасного режима).
 
 ## Email-сервис для production
 

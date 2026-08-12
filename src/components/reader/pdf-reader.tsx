@@ -124,11 +124,11 @@ export function PdfReader({ book, onProgress }: Props) {
         canvas.style.height = `${viewport.height}px`
         const ctx = canvas.getContext('2d')!
         ctx.scale(dpr, dpr)
-        const renderTask = pdfPage.render({
+        const renderTask: import('pdfjs-dist').RenderTask = pdfPage.render({
           canvasContext: ctx,
           viewport,
           canvas,
-        } as any)
+        })
         renderTaskRef.current = renderTask
         await renderTask.promise
       } catch (e) {

@@ -16,14 +16,14 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV JWT_SECRET=real-secret-please-configure-via-env-vars-in-amvera-2026
+# No JWT_SECRET here: auth validates lazily, so the build does not need it.
+# The platform must inject a real secret at runtime (see amvera.yaml).
 RUN npm run build
 
 FROM base AS runner
 RUN apk add --no-cache wget && addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs && mkdir -p /data && chown nextjs:nodejs /data
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV JWT_SECRET=real-secret-please-configure-via-env-vars-in-amvera-2026
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV DATABASE_URL=file:/data/chitalka.db

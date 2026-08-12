@@ -15,14 +15,17 @@ export async function GET(req: Request) {
     )
   }
   const expected = process.env.DEV_EMAIL_TOKEN
-  if (expected) {
-    const auth = req.headers.get('authorization')
-    if (auth !== `Bearer ${expected}`) {
-      return NextResponse.json(
-        { error: 'Forbidden' },
-        { status: 403 },
-      )
-    }
+  if (!expected) {
+    // Treat an unconfigured token as "disabled" — never serve reset/verify
+    // links to unauthenticated LAN visitors in dev mode.
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  const auth = req.headers.get('authorization')
+  if (auth !== `Bearer ${expected}`) {
+    return NextResponse.json(
+      { error: 'Forbidden' },
+      { status: 403 },
+    )
   }
   const emails = getRecentEmails(10).map((e) => ({
     id: e.id,

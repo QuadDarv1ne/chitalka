@@ -1,5 +1,6 @@
 import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/session'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -27,6 +28,11 @@ function detectFormat(filename: string): string | null {
 }
 
 export async function GET() {
+  const user = await getCurrentUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  }
+
   try {
     const files = fs.readdirSync(BOOKS_DIR, { withFileTypes: true })
     const list: CollectionFile[] = files

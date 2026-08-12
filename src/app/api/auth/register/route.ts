@@ -103,10 +103,13 @@ export async function POST(req: Request) {
       data: { userId: user.id, token: verifyToken, expiresAt: verifyExpiresAt },
     })
 
-    const verifyLink = `${getAppBaseUrl(req)}/?verify=${verifyToken}`
-    const escapedName = escapeHtml(displayName)
-
-    const html = `
+    // A failed welcome email must not break registration — the account exists
+    // and the user can resend the verification link later.
+    let previewUrl: string | undefined
+    try {
+      const verifyLink = `${getAppBaseUrl(req)}/?verify=${verifyToken}`
+      const escapedName = escapeHtml(displayName)
+      const html = `
       <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
         <h2 style="color: #1c1c1c;">Добро пожаловать в Читалку!</h2>
         <p style="color: #555; line-height: 1.6;">
@@ -126,17 +129,12 @@ export async function POST(req: Request) {
         </p>
       </div>
     `
-    const text = `Здравствуйте${displayName ? `, ${displayName}` : ''}!
+      const text = `Здравствуйте${displayName ? `, ${displayName}` : ''}!
 
 Ваш аккаунт в Читалке создан. Подтвердите email:
 ${verifyLink}
 
 Ссылка действительна 7 дней.`
-
-    // A failed welcome email must not break registration — the account exists
-    // and the user can resend the verification link later.
-    let previewUrl: string | undefined
-    try {
       const sent = await sendEmail({
         to: normalizedEmail,
         subject: 'Добро пожаловать! Подтвердите email — Читалка',
@@ -145,6 +143,8 @@ ${verifyLink}
       })
       previewUrl = sent.previewUrl
     } catch (e) {
+      // A missing NEXT_PUBLIC_APP_URL or failing SMTP delivery must not break
+      // registration — the account exists and the link can be resent later.
       logger.warn('Failed to send welcome email', e)
     }
 
@@ -174,7 +174,7 @@ ${verifyLink}
         emailVerified: null,
       },
       ...(process.env.NODE_ENV !== 'production'
-        ? { _devVerifyLink: previewUrl || verifyLink }
+        ? { _devVerifyLink: previewUrl ?? '' }
         : {}),
     })
   } catch (e) {
