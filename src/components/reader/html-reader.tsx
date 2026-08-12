@@ -262,7 +262,7 @@ export function HtmlReader({ book, onProgress }: Props) {
         </div>
       ) : (
         <div
-          className="mx-auto max-w-3xl px-6 py-10"
+          className="mx-auto max-w-[min(72rem,92vw)] px-6 py-10"
           style={{
             color: 'var(--reader-fg)',
             fontFamily: fontFamilyCss[settings.fontFamily],

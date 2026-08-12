@@ -377,7 +377,7 @@ export function TxtReader({ book, onProgress }: Props) {
       ) : (
         <article
           ref={articleRef}
-          className="mx-auto px-6 py-10 max-w-3xl"
+          className="mx-auto px-6 py-10 max-w-[min(72rem,92vw)]"
           style={{
             ...readerStyle,
             paddingLeft: marginX,
