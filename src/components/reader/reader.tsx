@@ -20,6 +20,8 @@ import { useReaderStore } from '@/store/reader-store'
 import { getBook, updateBook, flushBookWrites, type BookRecord } from '@/lib/library'
 import { syncBooksToServer } from '@/hooks/use-book-sync'
 import { useAuth } from '@/hooks/use-auth'
+import { estimateRemainingMinutes, formatMinutes } from '@/lib/constants'
+import { getWordsPerMinute, type ReadingSpeed } from '@/store/reader-store'
 import { EpubReader } from './epub-reader'
 import { TxtReader } from './txt-reader'
 import { PdfReader } from './pdf-reader'
@@ -66,6 +68,7 @@ export function Reader() {
   const [currentCfi, setCurrentCfi] = useState<string | undefined>(undefined)
   const [currentTextPosition, setCurrentTextPosition] = useState<number | undefined>(undefined)
   const [currentPdfPage, setCurrentPdfPage] = useState<number | undefined>(undefined)
+  const [estimatedRemainingMinutes, setEstimatedRemainingMinutes] = useState<number | null>(null)
 
   useEffect(() => {
     if (!currentBookId) return
@@ -80,6 +83,11 @@ export function Reader() {
         setCurrentPdfPage(b?.pdfPage)
         if (b) {
           updateBook(b.id, { lastOpenedAt: Date.now() }).catch(() => {})
+          // Calculate estimated remaining reading time
+          const readingSpeed = useReaderStore.getState().settings.readingSpeed as ReadingSpeed
+          const wpm = getWordsPerMinute(readingSpeed)
+          const remaining = estimateRemainingMinutes(b.format, b.size, b.progress ?? 0, wpm)
+          setEstimatedRemainingMinutes(remaining)
         }
       })
       .catch((e) => {
@@ -383,7 +391,7 @@ export function Reader() {
         </Button>
       )}
 
-{/* Bottom progress bar — hidden in fullscreen for immersive reading */}
+      {/* Bottom progress bar — hidden in fullscreen for immersive reading */}
       {!fullscreen && (
       <footer
         className="sticky bottom-0 z-30 flex h-12 items-center gap-3 border-t px-4 backdrop-blur"
@@ -404,6 +412,11 @@ export function Reader() {
             style={{ width: `${Math.max(2, progress * 100)}%` }}
           />
         </div>
+        {estimatedRemainingMinutes !== null && estimatedRemainingMinutes > 0 && (
+          <span className="text-xs tabular-nums" style={{ color: 'var(--reader-fg)' }}>
+            Осталось: {formatMinutes(estimatedRemainingMinutes)}
+          </span>
+        )}
         <Button
           variant="ghost"
           size="sm"
