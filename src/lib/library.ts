@@ -21,6 +21,7 @@ export interface BookRecord {
   audioTime?: number // seconds played within current track for audiobooks
   description?: string
   userId?: string | null // null = anonymous (logged out)
+  rating?: number // 1-5 stars
 }
 
 interface LibraryDB extends DBSchema {
@@ -158,13 +159,16 @@ export async function reassignBooksToUser(
   const db = await getDB()
   const all = await db.getAll('books')
   const toUpdate = all.filter((b) => (b.userId ?? null) === (oldUserId ?? null))
-  // Flush all pending writes before reassignment, then queue updates
+  // Flush all pending writes before reassignment, then queue updates.
+  // The record is re-read inside the queued task, so patches enqueued
+  // after the getAll() above are not clobbered by a stale snapshot.
   const promises: Promise<void>[] = []
   for (const book of toUpdate) {
     const prev = writeQueues.get(book.id) ?? Promise.resolve()
     const next = prev.then(async () => {
-      const updated = { ...book, userId: newUserId }
-      await db.put('books', updated)
+      const db = await getDB()
+      const current = await db.get('books', book.id)
+      await db.put('books', { ...(current ?? book), userId: newUserId })
     })
     writeQueues.set(book.id, next.catch(() => {}))
     promises.push(next)

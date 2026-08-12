@@ -61,10 +61,6 @@ export function TxtReader({ book, onProgress }: Props) {
       .then((text) => {
         if (cancelled) return
         setContent(text)
-        if (book.textPosition) {
-          const wordCount = Math.floor(book.textPosition / PAGE_WORDS)
-          setPage(Math.max(0, wordCount))
-        }
       })
       .catch((e) => logger.error(e))
       .finally(() => {
@@ -73,22 +69,29 @@ export function TxtReader({ book, onProgress }: Props) {
     return () => {
       cancelled = true
     }
-  }, [book.id, book.blob, book.textPosition])
+  }, [book.id, book.blob])
 
-  // Split into pages (by words, with chapter breaks)
-  const pages = useMemo(() => {
-    if (!content) return []
+  // Split into pages (by words, with chapter breaks).
+  // Records each page's cumulative word offset, so positions can be mapped
+  // to the exact page — chapter breaks flush pages early, so `page*PAGE_WORDS`
+  // does not describe where a page actually begins.
+  const [pages, pageStarts] = useMemo(() => {
+    if (!content) return [[], []] as const
     const isChapterStart = (line: string) =>
       /^(#{1,2})\s+/.test(line) ||
       /^(Глава|Часть|Раздел|Пролог|Эпилог|Chapter|Part|Section|Prologue|Epilogue)\s+([IVX]+|\d+)/i.test(line)
 
     const paragraphs = content.split(/\n\n+/).filter(Boolean)
     const result: string[] = []
+    const starts: number[] = []
     let current = ''
     let words = 0
+    let cumulative = 0
+    let pageStart = 0
     const flush = () => {
       if (current) {
         result.push(current)
+        starts.push(pageStart)
         current = ''
         words = 0
       }
@@ -97,16 +100,42 @@ export function TxtReader({ book, onProgress }: Props) {
       const pWords = p.split(/\s+/).filter(Boolean).length
       const firstLine = p.split('\n')[0] ?? ''
       const isChapter = isChapterStart(firstLine)
-      if (isChapter && current) flush()
-      if (words + pWords > PAGE_WORDS && current) flush()
+      if (current && (isChapter || words + pWords > PAGE_WORDS)) flush()
+      if (!current) pageStart = cumulative
       current = current ? `${current}\n\n${p}` : p
       words += pWords
+      cumulative += pWords
     }
-    if (current) result.push(current)
-    return result
+    if (current) {
+      result.push(current)
+      starts.push(pageStart)
+    }
+    return [result, starts] as const
   }, [content])
 
   const totalPages = pages.length
+
+  // Map a word position to the page containing it (falls back to the last page)
+  const findPageForPosition = useCallback(
+    (pos: number): number => {
+      for (let i = 0; i < totalPages; i++) {
+        const end = i + 1 < totalPages ? pageStarts[i + 1] : Infinity
+        if (pos >= pageStarts[i] && pos < end) return i
+      }
+      return Math.max(0, totalPages - 1)
+    },
+    [totalPages, pageStarts],
+  )
+
+  // Restore the saved position once the book is paginated
+  const positionRestoredRef = useRef(false)
+  useEffect(() => {
+    if (totalPages === 0 || positionRestoredRef.current) return
+    if (book.textPosition) {
+      positionRestoredRef.current = true
+      setPage(findPageForPosition(book.textPosition))
+    }
+  }, [totalPages, book.textPosition, findPageForPosition])
 
   // Clamp the restored page once the book is paginated (content may load
   // with a stale position that exceeds the page count)
@@ -120,9 +149,9 @@ export function TxtReader({ book, onProgress }: Props) {
   const currentPage = pages[page] || ''
   const progress = totalPages > 0 ? (page + 1) / totalPages : 0
 
-  // Highlights that belong to this page (approx by textPosition)
-  const pageStartPos = page * PAGE_WORDS
-  const pageEndPos = (page + 1) * PAGE_WORDS
+  // Highlights that belong to this page (by real word range)
+  const pageStartPos = pageStarts[page] ?? 0
+  const pageEndPos = pageStarts[page + 1] ?? Infinity
   const pageHighlights = useMemo(
     () =>
       highlights.filter(
@@ -137,9 +166,9 @@ export function TxtReader({ book, onProgress }: Props) {
 
   useEffect(() => {
     if (totalPages > 0) {
-      onProgress(progress, { textPosition: page * PAGE_WORDS })
+      onProgress(progress, { textPosition: pageStartPos })
     }
-  }, [page, totalPages, progress, onProgress])
+  }, [page, totalPages, progress, onProgress, pageStartPos, pageEndPos])
 
   const prev = useCallback(() => {
     if (page <= 0) return
@@ -173,8 +202,7 @@ export function TxtReader({ book, onProgress }: Props) {
     const onGotoPosition = (e: Event) => {
       const pos = (e as CustomEvent<number>).detail
       if (typeof pos === 'number') {
-        const wordCount = Math.floor(pos / PAGE_WORDS)
-        setPage(Math.max(0, Math.min(totalPages - 1, wordCount)))
+        setPage(findPageForPosition(pos))
         containerRef.current?.scrollTo({ top: 0 })
       }
     }
@@ -194,7 +222,7 @@ export function TxtReader({ book, onProgress }: Props) {
       window.removeEventListener('txt-goto-position', onGotoPosition)
       window.removeEventListener('txt-goto', onGotoLabel)
     }
-  }, [totalPages, pages])
+  }, [findPageForPosition, pages, totalPages])
 
   // Text selection → show color picker
   useEffect(() => {
@@ -259,7 +287,7 @@ export function TxtReader({ book, onProgress }: Props) {
       bookId: book.id,
       text: selection.text,
       color,
-      textPosition: page * PAGE_WORDS,
+      textPosition: pageStartPos,
     })
     toast.success('Выделение добавлено')
     setSelection(null)

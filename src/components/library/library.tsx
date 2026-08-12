@@ -88,6 +88,7 @@ export function Library() {
   const setTheme = useReaderStore((s) => s.setTheme)
   const theme = useReaderStore((s) => s.settings.theme)
   const highlights = useReaderStore((s) => s.highlights)
+  const notes = useReaderStore((s) => s.notes)
   const sessions = useReaderStore((s) => s.sessions)
   const settings = useReaderStore((s) => s.settings)
   const bookmarks = useReaderStore((s) => s.bookmarks)
@@ -181,7 +182,20 @@ export function Library() {
               continue
             }
             try {
-              const headHash = await hashFileHead(file)
+              // FB2 is stored as converted plain text, so dedupe against the
+              // converted text — hashing the raw XML head never matches the
+              // stored blob and the same book always imports twice.
+              let dedupeBlob: Blob = file
+              if (format === 'fb2') {
+                const textContent = await parseFb2Content(file)
+                if (!textContent) {
+                  toast.error(`Не удалось извлечь текст: ${file.name}`)
+                  failed++
+                  continue
+                }
+                dedupeBlob = new Blob([textContent], { type: 'text/plain' })
+              }
+              const headHash = await hashFileHead(dedupeBlob)
               if (existingHashes.has(headHash)) {
                 skipped++
                 continue
@@ -194,14 +208,7 @@ export function Library() {
                 meta = await parsePdfMeta(file)
               } else if (format === 'fb2') {
                 meta = await parseFb2Meta(file)
-                // Convert FB2 to text and store as text blob for TxtReader
-                const textContent = await parseFb2Content(file)
-                if (!textContent) {
-                  toast.error(`Не удалось извлечь текст: ${file.name}`)
-                  failed++
-                  continue
-                }
-                blob = new Blob([textContent], { type: 'text/plain' })
+                blob = dedupeBlob
               } else if (format === 'mp3') {
                 meta = parseAudioMeta(file.name)
               } else {
@@ -272,6 +279,7 @@ export function Library() {
           settings: backup.settings,
           bookmarks: backup.bookmarks,
           highlights: backup.highlights,
+          notes: backup.notes ?? [],
           sessions: backup.sessions,
         })
         let serverImported = 0
@@ -466,6 +474,7 @@ export function Library() {
                         settings,
                         bookmarks,
                         highlights,
+                        notes,
                         sessions,
                       )
                       toast.success('Резервная копия создана')
@@ -704,6 +713,7 @@ const BookCard = memo(function BookCard({
     mp3: { label: 'MP3', color: 'bg-amber-600 text-white' },
   }
   const badge = formatBadge[book.format]
+  const stars = book.rating ? '★'.repeat(book.rating) + '☆'.repeat(5 - book.rating) : ''
 
   return (
     <Card className="group relative overflow-hidden p-0 cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 duration-200" onClick={onOpen}>
@@ -756,6 +766,11 @@ const BookCard = memo(function BookCard({
         <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
           {book.author}
         </p>
+        {stars && (
+          <p className="text-xs mt-1 text-amber-500" title={`${book.rating} из 5`}>
+            {stars}
+          </p>
+        )}
       </div>
     </Card>
   )

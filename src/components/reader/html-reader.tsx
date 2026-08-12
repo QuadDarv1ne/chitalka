@@ -14,7 +14,6 @@ import {
 } from '@/store/reader-store'
 import { decodeTextBlob } from '@/lib/text-encoding'
 import { useReadingTracker } from '@/hooks/use-reading-tracker'
-import { PAGE_WORDS } from '@/lib/constants'
 import { ColorPicker } from './highlights-panel'
 import { toast } from 'sonner'
 
@@ -49,10 +48,6 @@ export function HtmlReader({ book, onProgress }: Props) {
       .then((text) => {
         if (cancelled) return
         setHtml(text)
-        if (book.textPosition) {
-          const wordCount = Math.floor(book.textPosition / PAGE_WORDS)
-          setPage(Math.max(0, wordCount))
-        }
       })
       .catch((e) => logger.error(e))
       .finally(() => {
@@ -61,13 +56,35 @@ export function HtmlReader({ book, onProgress }: Props) {
     return () => {
       cancelled = true
     }
-  }, [book.id, book.blob, book.textPosition])
+  }, [book.id, book.blob])
 
   // Split HTML into pages by sections. Must be memoized on `html` — the
   // content loads asynchronously, so a lazy useState initializer would only
   // ever see the empty string and produce a blank reader.
-  const pages = useMemo(() => splitHtmlIntoPages(html), [html])
+  const [pages, pageStarts] = useMemo(() => splitHtmlIntoPages(html), [html])
   const totalPages = pages.length
+
+  // Map a word position to the page containing it (falls back to the last page)
+  const findPageForPosition = useCallback(
+    (pos: number): number => {
+      for (let i = 0; i < totalPages; i++) {
+        const end = i + 1 < totalPages ? pageStarts[i + 1] : Infinity
+        if (pos >= pageStarts[i] && pos < end) return i
+      }
+      return Math.max(0, totalPages - 1)
+    },
+    [totalPages, pageStarts],
+  )
+
+  // Restore the saved position once the book is paginated
+  const positionRestoredRef = useRef(false)
+  useEffect(() => {
+    if (totalPages === 0 || positionRestoredRef.current) return
+    if (book.textPosition) {
+      positionRestoredRef.current = true
+      setPage(findPageForPosition(book.textPosition))
+    }
+  }, [totalPages, book.textPosition, findPageForPosition])
 
   // Clamp the restored page once the book is paginated (the saved position
   // may exceed the page count for a different pagination)
@@ -81,9 +98,9 @@ export function HtmlReader({ book, onProgress }: Props) {
   const currentPage = pages[page] || ''
   const progress = totalPages > 0 ? (page + 1) / totalPages : 0
 
-  // Highlights for current page (approximate by text position)
-  const pageStartPos = page * PAGE_WORDS
-  const pageEndPos = (page + 1) * PAGE_WORDS
+  // Highlights for current page (by real word range)
+  const pageStartPos = pageStarts[page] ?? 0
+  const pageEndPos = pageStarts[page + 1] ?? Infinity
   const pageHighlights = useMemo(
     () =>
       highlights.filter(
@@ -98,9 +115,9 @@ export function HtmlReader({ book, onProgress }: Props) {
 
   useEffect(() => {
     if (totalPages > 0) {
-      onProgress(progress, { textPosition: page * PAGE_WORDS })
+      onProgress(progress, { textPosition: pageStartPos })
     }
-  }, [page, totalPages, progress, onProgress])
+  }, [page, totalPages, progress, onProgress, pageStartPos])
 
   const prev = useCallback(() => {
     if (page <= 0) return
@@ -159,14 +176,27 @@ export function HtmlReader({ book, onProgress }: Props) {
     const onGotoPosition = (e: Event) => {
       const pos = (e as CustomEvent<number>).detail
       if (typeof pos === 'number') {
-        const wordCount = Math.floor(pos / PAGE_WORDS)
-        setPage(Math.max(0, Math.min(totalPages - 1, wordCount)))
+        setPage(findPageForPosition(pos))
         containerRef.current?.scrollTo({ top: 0 })
       }
     }
+    const onGotoLabel = (e: Event) => {
+      const label = (e as CustomEvent<string>).detail
+      if (typeof label === 'string') {
+        const idx = pages.findIndex((p) => p.includes(label))
+        if (idx >= 0) {
+          setPage(idx)
+          containerRef.current?.scrollTo({ top: 0 })
+        }
+      }
+    }
     window.addEventListener('txt-goto-position', onGotoPosition)
-    return () => window.removeEventListener('txt-goto-position', onGotoPosition)
-  }, [totalPages])
+    window.addEventListener('txt-goto', onGotoLabel)
+    return () => {
+      window.removeEventListener('txt-goto-position', onGotoPosition)
+      window.removeEventListener('txt-goto', onGotoLabel)
+    }
+  }, [totalPages, pages, findPageForPosition])
 
   // Messages from the reader iframe: text selection and highlight clicks
   useEffect(() => {
@@ -200,7 +230,7 @@ export function HtmlReader({ book, onProgress }: Props) {
       bookId: book.id,
       text: selection.text,
       color,
-      textPosition: page * PAGE_WORDS,
+      textPosition: pageStartPos,
     })
     toast.success('Выделение добавлено')
     setSelection(null)
@@ -346,8 +376,8 @@ export function HtmlReader({ book, onProgress }: Props) {
  * Split HTML content into pages by <h1>/<h2> headings or <section> tags,
  * falling back to chunks of ~PAGE_WORDS for unstructured books.
  */
-function splitHtmlIntoPages(html: string): string[] {
-  if (!html) return []
+function splitHtmlIntoPages(html: string): [string[], number[]] {
+  if (!html) return [[], []]
 
   const sections = html.split(/(<h[12][^>]*>.*?<\/h[12]>)|(<section[^>]*>)/gi)
   const chunks: string[] = []
@@ -366,6 +396,7 @@ function splitHtmlIntoPages(html: string): string[] {
   if (current) chunks.push(current)
 
   // If we got too many chunks (>200), merge groups of 3 into one page
+  let pages: string[]
   if (chunks.length > 200) {
     const merged: string[] = []
     let acc = ''
@@ -378,10 +409,22 @@ function splitHtmlIntoPages(html: string): string[] {
       }
     }
     if (acc) merged.push(acc)
-    return merged
+    pages = merged
+  } else {
+    pages = chunks.length > 0 ? chunks : [html]
   }
 
-  return chunks.length > 0 ? chunks : [html]
+  // Cumulative word offsets per page — the restored position and
+  // highlight ranges must land on the page that actually owns them.
+  const wordCount = (chunk: string) =>
+    chunk.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length
+  const starts: number[] = []
+  let cumulative = 0
+  for (const page of pages) {
+    starts.push(cumulative)
+    cumulative += wordCount(page)
+  }
+  return [pages, starts]
 }
 
 /**

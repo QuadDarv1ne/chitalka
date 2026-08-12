@@ -1,7 +1,7 @@
 'use client'
 
 import { logger } from '@/lib/logger'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -75,6 +75,19 @@ export function SearchDialog({ book }: Props) {
     return () => { cancelled = true }
   }, [open, book])
 
+  // Word-start character offsets, built once per text — match-to-word
+  // conversion then costs O(log n) per hit instead of O(n) slice+split.
+  const wordStarts = useMemo(() => {
+    const starts: number[] = []
+    let inWord = false
+    for (let i = 0; i < textContent.length; i++) {
+      const isWs = /\s/.test(textContent[i])
+      if (!isWs && !inWord) starts.push(i)
+      inWord = !isWs
+    }
+    return starts
+  }, [textContent])
+
   const search = useCallback(async () => {
     if (!query.trim()) {
       setResults([])
@@ -94,9 +107,16 @@ export function SearchDialog({ book }: Props) {
         const found: SearchResult[] = []
         let idx = lower.indexOf(q)
         while (idx !== -1 && found.length < 100) {
-          // textContent offsets are characters, but positions are stored in words —
-          // convert the match to a word offset so navigation and labels are correct
-          const wordOffset = textContent.slice(0, idx).split(/\s+/).filter(Boolean).length
+          // Word offset of the match start: binary search over precomputed
+          // word-start positions (positions are stored in words, indexes in chars)
+          let lo = 0
+          let hi = wordStarts.length
+          while (lo < hi) {
+            const mid = (lo + hi) >> 1
+            if (wordStarts[mid] <= idx) lo = mid + 1
+            else hi = mid
+          }
+          const wordOffset = lo
           const pageNum = Math.floor(wordOffset / PAGE_WORDS) + 1
           const start = Math.max(0, idx - 50)
           const end = Math.min(textContent.length, idx + query.length + 50)
@@ -191,7 +211,7 @@ export function SearchDialog({ book }: Props) {
     } finally {
       if (searchSeqRef.current === seq) setLoading(false)
     }
-  }, [query, book, textContent, textLoaded])
+  }, [query, book, textContent, textLoaded, wordStarts])
 
   const goTo = useCallback(
     (result: SearchResult) => {

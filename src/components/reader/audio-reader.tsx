@@ -50,6 +50,9 @@ export function AudioReader({ book, onProgress }: Props) {
   const trackRef = useRef(currentTrack)
   const onProgressRef = useRef(onProgress)
   onProgressRef.current = onProgress
+  const playingRef = useRef(false)
+  const autoAdvanceRef = useRef(false)
+  const didRestoreRef = useRef(false)
   const settings = useReaderStore((s) => s.settings)
 
   useReadingTracker(book.id, pagesFlipped)
@@ -119,12 +122,22 @@ export function AudioReader({ book, onProgress }: Props) {
       setDuration(audio.duration || 0)
     }
     const onEnded = () => {
-      // Auto-advance to next track
-      setIsPlaying(false)
-      setCurrentTrack((prev) => (prev < tracks.length - 1 ? prev + 1 : prev))
+      // Auto-advance to next track and keep playing
+      autoAdvanceRef.current = true
+      if (currentTrackRef.current < tracks.length - 1) {
+        setCurrentTrack(currentTrackRef.current + 1)
+      } else {
+        setIsPlaying(false)
+      }
     }
-    const onPlay = () => setIsPlaying(true)
-    const onPause = () => setIsPlaying(false)
+    const onPlay = () => {
+      playingRef.current = true
+      setIsPlaying(true)
+    }
+    const onPause = () => {
+      playingRef.current = false
+      setIsPlaying(false)
+    }
 
     audio.addEventListener('timeupdate', onTimeUpdate)
     audio.addEventListener('durationchange', onDurationChange)
@@ -141,6 +154,9 @@ export function AudioReader({ book, onProgress }: Props) {
     }
   }, [tracks.length])
 
+  const currentTrackRef = useRef(currentTrack)
+  currentTrackRef.current = currentTrack
+
   // Restore position when track changes; count user-initiated track flips
   useEffect(() => {
     if (trackRef.current !== currentTrack) {
@@ -153,18 +169,31 @@ export function AudioReader({ book, onProgress }: Props) {
     const url = trackUrls[currentTrack]
     if (!url) return
 
-    // When switching tracks, seek to saved position only for the initial track
-    const seekTo = currentTrack === (book.audioTrack ?? 0) ? (book.audioTime ?? 0) : 0
+    // Seek to the saved position only on the first load of the initial
+    // track — coming back to that track mid-session must not reset the
+    // in-session position (and a remount must not seek again).
+    const restore = currentTrack === (book.audioTrack ?? 0) && !didRestoreRef.current
+    if (restore) didRestoreRef.current = true
+
+    // After an ended auto-advance or a manual switch while playing, keep
+    // playback going — loading the new source must not stall the session.
+    const shouldPlay = autoAdvanceRef.current || playingRef.current
+    autoAdvanceRef.current = false
+
     audio.src = url
     audio.load()
 
     const onLoadedMetadata = () => {
-      if (seekTo > 0 && seekTo < audio.duration) {
-        audio.currentTime = seekTo
+      if (restore) {
+        const saved = book.audioTime ?? 0
+        if (saved > 0 && saved < audio.duration) {
+          audio.currentTime = saved
+        }
       }
       audio.playbackRate = playbackRate
       audio.volume = volume
       audio.muted = muted
+      if (shouldPlay) audio.play().catch(() => {})
     }
     audio.addEventListener('loadedmetadata', onLoadedMetadata, { once: true })
 

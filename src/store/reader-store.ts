@@ -30,6 +30,7 @@ export interface ReaderSettings {
   ttsRate: number // 0.5..2.0
   ttsVoice: string | null
   dailyGoalMinutes: number // 5..240
+  readingSpeed: ReadingSpeed // words per minute category
 }
 
 export interface Bookmark {
@@ -54,6 +55,16 @@ export interface Highlight {
   createdAt: number
 }
 
+export interface BookNote {
+  id: string
+  bookId: string
+  text: string
+  cfi?: string
+  textPosition?: number
+  pdfPage?: number
+  createdAt: number
+}
+
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink' | 'purple'
 
 export interface ReadingSession {
@@ -63,12 +74,20 @@ export interface ReadingSession {
   pages: number
 }
 
+/** Estimated reading speed in words per minute */
+export type ReadingSpeed = 'slow' | 'normal' | 'fast' | 'very-fast'
+const SPEEDS: Record<ReadingSpeed, number> = { slow: 150, normal: 200, fast: 250, 'very-fast': 300 }
+export function getWordsPerMinute(speed: ReadingSpeed): number {
+  return SPEEDS[speed]
+}
+
 interface ReaderState {
   view: View
   currentBookId: string | null
   settings: ReaderSettings
   bookmarks: Bookmark[]
   highlights: Highlight[]
+  notes: BookNote[]
   sessions: ReadingSession[]
   searchOpen: boolean
   sidebarOpen: boolean
@@ -88,12 +107,17 @@ interface ReaderState {
   updateHighlight: (id: string, patch: Partial<Highlight>) => void
   removeHighlight: (id: string) => void
 
+  addNote: (n: Omit<BookNote, 'id' | 'createdAt'>) => void
+  updateNote: (id: string, patch: Partial<BookNote>) => void
+  removeNote: (id: string) => void
+
   logReading: (bookId: string, minutes: number, pages: number) => void
   removeBookData: (bookId: string) => void
   restoreData: (data: {
     settings: Partial<ReaderSettings>
     bookmarks: Bookmark[]
     highlights: Highlight[]
+    notes: BookNote[]
     sessions: ReadingSession[]
   }) => void
 
@@ -114,6 +138,7 @@ const defaultSettings: ReaderSettings = {
   ttsRate: 1.0,
   ttsVoice: null,
   dailyGoalMinutes: 30,
+  readingSpeed: 'normal',
 }
 
 /**
@@ -148,6 +173,7 @@ export const useReaderStore = create<ReaderState>()(
       settings: defaultSettings,
       bookmarks: [],
       highlights: [],
+      notes: [],
       sessions: [],
       searchOpen: false,
       sidebarOpen: false,
@@ -199,6 +225,27 @@ export const useReaderStore = create<ReaderState>()(
           highlights: s.highlights.filter((h) => h.id !== id),
         })),
 
+      addNote: (n) => {
+        const id = generateId()
+        set((s) => ({
+          notes: [
+            ...s.notes,
+            { ...n, id, createdAt: Date.now() },
+          ],
+        }))
+        return id
+      },
+      updateNote: (id, patch) =>
+        set((s) => ({
+          notes: s.notes.map((n) =>
+            n.id === id ? { ...n, ...patch } : n,
+          ),
+        })),
+      removeNote: (id) =>
+        set((s) => ({
+          notes: s.notes.filter((n) => n.id !== id),
+        })),
+
       logReading: (bookId, minutes, pages) =>
         set((s) => {
           const safeMinutes = Math.max(0, Math.min(minutes, 1440))
@@ -230,21 +277,26 @@ export const useReaderStore = create<ReaderState>()(
         set((s) => ({
           bookmarks: s.bookmarks.filter((b) => b.bookId !== bookId),
           highlights: s.highlights.filter((h) => h.bookId !== bookId),
+          notes: s.notes.filter((n) => n.bookId !== bookId),
           sessions: s.sessions.filter((sess) => sess.bookId !== bookId),
         })),
 
-      restoreData: ({ settings, bookmarks, highlights, sessions }) =>
+      restoreData: ({ settings, bookmarks, highlights, notes, sessions }) =>
         set((s) => {
           const validColor = (c: unknown): c is HighlightColor =>
             c === 'yellow' || c === 'green' || c === 'blue' || c === 'pink' || c === 'purple'
           const existingBookmarkIds = new Set(s.bookmarks.map((b) => b.id))
           const existingHighlightIds = new Set(s.highlights.map((h) => h.id))
+          const existingNoteIds = new Set(s.notes.map((n) => n.id))
           const restoredBookmarks = bookmarks
             .filter((b) => !existingBookmarkIds.has(b.id))
             .slice(0, 2000)
           const restoredHighlights = highlights
             .filter((h) => !existingHighlightIds.has(h.id) && validColor(h.color))
             .slice(0, 10000)
+          const restoredNotes = notes
+            .filter((n) => !existingNoteIds.has(n.id))
+            .slice(0, 5000)
           // Merge sessions by (bookId, date) — sessions have no id, so a
           // naive append would double-count stats when restoring twice.
           const sessionKey = (sess: ReadingSession) => `${sess.bookId}:${sess.date}`
@@ -263,6 +315,7 @@ export const useReaderStore = create<ReaderState>()(
             settings: mergeSettings(settings),
             bookmarks: [...s.bookmarks, ...restoredBookmarks],
             highlights: [...s.highlights, ...restoredHighlights],
+            notes: [...s.notes, ...restoredNotes],
             sessions: Array.from(merged.values()).slice(-100000),
           }
         }),
@@ -279,6 +332,7 @@ export const useReaderStore = create<ReaderState>()(
         settings: s.settings,
         bookmarks: s.bookmarks,
         highlights: s.highlights,
+        notes: s.notes,
         sessions: s.sessions,
       }),
       migrate: (state: any, version: number) => {
@@ -290,6 +344,13 @@ export const useReaderStore = create<ReaderState>()(
           // v1 → v2: ensure dailyGoalMinutes exists
           if (next?.settings && typeof next.settings.dailyGoalMinutes !== 'number') {
             next.settings.dailyGoalMinutes = 30
+          }
+        }
+        if (version <= 2) {
+          // v2 → v3: add notes array and readingSpeed
+          if (!next?.notes) next.notes = []
+          if (next?.settings && typeof next.settings.readingSpeed !== 'string') {
+            next.settings.readingSpeed = 'normal' as ReadingSpeed
           }
         }
         return {

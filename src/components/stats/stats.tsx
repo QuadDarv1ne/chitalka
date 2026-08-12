@@ -15,7 +15,7 @@ import {
   Flame,
   Target,
 } from 'lucide-react'
-import { useReaderStore, localDateString } from '@/store/reader-store'
+import { useReaderStore, localDateString, getWordsPerMinute } from '@/store/reader-store'
 import { getAllBooks, type BookRecord } from '@/lib/library'
 import { UserMenu } from '@/components/auth/user-menu'
 import { useAuth } from '@/hooks/use-auth'
@@ -30,12 +30,20 @@ import {
   Legend,
 } from 'recharts'
 
+const SPEED_LABELS: Record<string, string> = {
+  slow: 'Медленно (150 сл/мин)',
+  normal: 'Нормально (200 сл/мин)',
+  fast: 'Быстро (250 сл/мин)',
+  'very-fast': 'Очень быстро (300 сл/мин)',
+}
+
 export function Stats() {
   const setView = useReaderStore((s) => s.setView)
   const sessions = useReaderStore((s) => s.sessions)
   const highlights = useReaderStore((s) => s.highlights)
   const bookmarks = useReaderStore((s) => s.bookmarks)
   const dailyGoalMinutes = useReaderStore((s) => s.settings.dailyGoalMinutes)
+  const readingSpeed = useReaderStore((s) => s.settings.readingSpeed)
   const { user } = useAuth()
   const userId = user?.id ?? null
   const [books, setBooks] = useState<BookRecord[]>([])
@@ -171,6 +179,13 @@ export function Stats() {
             value={String(highlights.length)}
             sub={`${bookmarks.length} закладок`}
             color="bg-purple-500/10 text-purple-600"
+          />
+          <StatCard
+            icon={<Target className="h-5 w-5" />}
+            label="Скорость чтения"
+            value={`${getWordsPerMinute(readingSpeed)} сл/мин`}
+            sub={SPEED_LABELS[readingSpeed]}
+            color="bg-cyan-500/10 text-cyan-600"
           />
         </div>
 

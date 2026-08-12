@@ -12,6 +12,7 @@ import {
   Highlighter,
   Loader2,
   Keyboard,
+  StickyNote,
 } from 'lucide-react'
 import { useReaderStore } from '@/store/reader-store'
 import { getBook, updateBook, flushBookWrites, type BookRecord } from '@/lib/library'
@@ -26,6 +27,8 @@ import { ReaderSettingsPanel } from './settings-panel'
 import { TocPanel } from './toc-panel'
 import { BookmarksPanel } from './bookmarks-panel'
 import { HighlightsPanel } from './highlights-panel'
+import { NotesPanel } from './notes-panel'
+import { BookRating } from './book-rating'
 import { SearchDialog } from './search-dialog'
 import { ShortcutsHelp } from './shortcuts-help'
 import {
@@ -36,7 +39,7 @@ import {
 } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 
-type SidebarTab = 'toc' | 'bookmarks' | 'highlights'
+type SidebarTab = 'toc' | 'bookmarks' | 'highlights' | 'notes'
 
 export function Reader() {
   const currentBookId = useReaderStore((s) => s.currentBookId)
@@ -214,7 +217,7 @@ export function Reader() {
     setActiveTab(tab)
     // Close all panels first, then open the requested one
     const shouldOpenSidebar = tab === 'bookmarks'
-    const shouldOpenToc = tab === 'toc' || tab === 'highlights'
+    const shouldOpenToc = tab === 'toc' || tab === 'highlights' || tab === 'notes'
     setBookmarksOpen(shouldOpenSidebar)
     setTocOpen(shouldOpenToc)
     setSettingsOpen(false)
@@ -239,6 +242,7 @@ export function Reader() {
           <p className="truncate text-xs opacity-70" style={{ color: 'var(--reader-fg)' }}>
             {book.author}
           </p>
+          <BookRating bookId={book.id} currentRating={book.rating} />
         </div>
 
         <div className="flex items-center gap-1">
@@ -277,6 +281,15 @@ export function Reader() {
             title="Выделения"
           >
             <Highlighter className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => openSidebar('notes')}
+            aria-label="Заметки"
+            title="Заметки"
+          >
+            <StickyNote className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
@@ -363,13 +376,15 @@ export function Reader() {
       {/* TOC Sheet (also used for highlights) */}
       <Sheet open={tocOpen} onOpenChange={setTocOpen}>
         <SheetContent side="left" className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>
-              {activeTab === 'highlights' ? 'Выделения' : 'Оглавление'}
-            </SheetTitle>
-          </SheetHeader>
+            <SheetHeader>
+              <SheetTitle>
+                {activeTab === 'highlights' ? 'Выделения' : activeTab === 'notes' ? 'Заметки' : 'Оглавление'}
+              </SheetTitle>
+            </SheetHeader>
           {activeTab === 'highlights' ? (
             <HighlightsPanel book={book} onNavigate={() => setTocOpen(false)} />
+          ) : activeTab === 'notes' ? (
+            <NotesPanel book={book} />
           ) : (
             <TocPanel book={book} onNavigate={() => setTocOpen(false)} />
           )}

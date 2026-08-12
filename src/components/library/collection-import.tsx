@@ -137,16 +137,6 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
           if (!res.ok) throw new Error(`HTTP ${res.status}`)
           const blob = await res.blob()
 
-          const head = await blob.slice(0, 64 * 1024).arrayBuffer()
-          const digest = await crypto.subtle.digest('SHA-256', head)
-          const bytes = new Uint8Array(digest)
-          let hex = ''
-          for (const byte of bytes) hex += byte.toString(16).padStart(2, '0')
-          if (existingHashes.has(hex)) {
-            setProgress((p) => ({ ...p, done: p.done + 1 }))
-            continue
-          }
-
           const format = detectFormat(file.name)
           if (!format) {
             setProgress((p) => ({ ...p, done: p.done + 1 }))
@@ -156,6 +146,28 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
           // Convert Blob to File so existing parsers (which take File) work
           const asFile = new File([blob], file.name, { type: blob.type })
 
+          // FB2 is stored as converted plain text — dedupe against the
+          // stored representation, otherwise the same book always imports twice
+          let dedupeBlob: Blob = blob
+          if (format === 'fb2') {
+            const textContent = await parseFb2Content(asFile)
+            if (!textContent) {
+              setProgress((p) => ({ ...p, done: p.done + 1 }))
+              continue
+            }
+            dedupeBlob = new Blob([textContent], { type: 'text/plain' })
+          }
+
+          const head = await dedupeBlob.slice(0, 64 * 1024).arrayBuffer()
+          const digest = await crypto.subtle.digest('SHA-256', head)
+          const bytes = new Uint8Array(digest)
+          let hex = ''
+          for (const byte of bytes) hex += byte.toString(16).padStart(2, '0')
+          if (existingHashes.has(hex)) {
+            setProgress((p) => ({ ...p, done: p.done + 1 }))
+            continue
+          }
+
           let meta: { title: string; author: string; cover?: string; description?: string; format: string }
           let storeBlob: Blob = blob
           if (format === 'epub') {
@@ -164,12 +176,7 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
             meta = await parsePdfMeta(asFile)
           } else if (format === 'fb2') {
             meta = await parseFb2Meta(asFile)
-            const textContent = await parseFb2Content(asFile)
-            if (!textContent) {
-              setProgress((p) => ({ ...p, done: p.done + 1 }))
-              continue
-            }
-            storeBlob = new Blob([textContent], { type: 'text/plain' })
+            storeBlob = dedupeBlob
           } else if (format === 'mp3') {
             meta = parseAudioMeta(file.name)
           } else {

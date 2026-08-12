@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useReaderStore, type Theme, type FontFamily } from '@/store/reader-store'
+import { useReaderStore, type Theme, type FontFamily, type ReadingSpeed } from '@/store/reader-store'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -257,6 +257,37 @@ export function ReaderSettingsPanel() {
             step={0.1}
             onValueChange={(v) => updateSettings({ ttsRate: Math.round(v[0] * 10) / 10 })}
           />
+        </div>
+      </section>
+
+      <Separator />
+
+      {/* Reading speed */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-muted-foreground" />
+          <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+            Скорость чтения
+          </Label>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { key: 'slow' as ReadingSpeed, label: 'Медленно', wpm: '150 сл/мин' },
+            { key: 'normal' as ReadingSpeed, label: 'Нормально', wpm: '200 сл/мин' },
+            { key: 'fast' as ReadingSpeed, label: 'Быстро', wpm: '250 сл/мин' },
+            { key: 'very-fast' as ReadingSpeed, label: 'Очень быстро', wpm: '300 сл/мин' },
+          ]).map((opt) => (
+            <Button
+              key={opt.key}
+              variant={settings.readingSpeed === opt.key ? 'default' : 'outline'}
+              size="sm"
+              className="flex-col gap-0.5 h-auto py-2"
+              onClick={() => updateSettings({ readingSpeed: opt.key })}
+            >
+              <span className="text-xs font-medium">{opt.label}</span>
+              <span className="text-[9px] text-muted-foreground">{opt.wpm}</span>
+            </Button>
+          ))}
         </div>
       </section>
 

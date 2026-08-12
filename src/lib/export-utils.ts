@@ -1,6 +1,6 @@
 'use client'
 
-import type { Highlight, ReaderSettings, Bookmark, ReadingSession } from '@/store/reader-store'
+import type { Highlight, ReaderSettings, Bookmark, ReadingSession, BookNote } from '@/store/reader-store'
 import type { BookRecord } from '@/lib/library'
 import { highlightColors } from '@/store/reader-store'
 
@@ -21,6 +21,7 @@ export interface BackupData {
   settings: ReaderSettings
   bookmarks: Bookmark[]
   highlights: Highlight[]
+  notes: BookNote[]
   sessions: ReadingSession[]
 }
 
@@ -82,6 +83,7 @@ export async function exportLibraryBackup(
   settings: ReaderSettings,
   bookmarks: Bookmark[],
   highlights: Highlight[],
+  notes: BookNote[],
   sessions: ReadingSession[],
 ): Promise<void> {
   const books = await getAllBooks()
@@ -98,12 +100,13 @@ export async function exportLibraryBackup(
     description: b.description,
   }))
   const backup = {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     books: booksMeta,
     settings,
     bookmarks,
     highlights,
+    notes,
     sessions,
   }
   const blob = new Blob([JSON.stringify(backup, null, 2)], {
@@ -143,7 +146,7 @@ export async function parseLibraryBackup(file: File): Promise<BackupData> {
     throw new Error('Некорректная структура резервной копии')
   }
   const backup = data as Record<string, unknown>
-  if (typeof backup.version !== 'number' || backup.version < 1 || backup.version > 2) {
+  if (typeof backup.version !== 'number' || backup.version < 1 || backup.version > 3) {
     throw new Error('Неподдерживаемая версия резервной копии')
   }
   if (!Array.isArray(backup.books) || backup.books.length > 5000) {
@@ -158,6 +161,9 @@ export async function parseLibraryBackup(file: File): Promise<BackupData> {
   }
   if (!Array.isArray(backup.highlights)) {
     throw new Error('Некорректные данные выделений в резервной копии')
+  }
+  if (!Array.isArray(backup.notes)) {
+    throw new Error('Некорректные данные заметок в резервной копии')
   }
   if (!Array.isArray(backup.sessions)) {
     throw new Error('Некорректные данные сессий чтения в резервной копии')
