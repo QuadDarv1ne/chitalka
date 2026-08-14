@@ -838,11 +838,28 @@ const ThemeSwitcher = memo(function ThemeSwitcher({ value, onChange }: { value: 
   )
 })
 
-async function hashFileHead(source: Blob): Promise<string> {
+export async function hashFileHead(source: Blob): Promise<string> {
   const head = await source.slice(0, 64 * 1024).arrayBuffer()
-  const digest = await crypto.subtle.digest('SHA-256', head)
-  const bytes = new Uint8Array(digest)
-  let hex = ''
-  for (const b of bytes) hex += b.toString(16).padStart(2, '0')
-  return hex
+  // crypto.subtle is only available in secure contexts (HTTPS or
+  // localhost). Fall back to a fast non-crypto hash for plain HTTP /
+  // LAN deployments so dedup still works — it's just a fingerprint for
+  // duplicate detection, not a security boundary.
+  if (typeof crypto !== 'undefined' && crypto.subtle?.digest) {
+    const digest = await crypto.subtle.digest('SHA-256', head)
+    const bytes = new Uint8Array(digest)
+    let hex = ''
+    for (const b of bytes) hex += b.toString(16).padStart(2, '0')
+    return hex
+  }
+  // FNV-1a 64-bit over the first 64 KiB
+  const bytes = new Uint8Array(head)
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193
+  for (let i = 0; i < bytes.length; i++) {
+    h1 ^= bytes[i]
+    h1 = Math.imul(h1, 0x01000193)
+    h2 ^= bytes[i] + 1
+    h2 = Math.imul(h2, 0x85ebca6b)
+  }
+  return `${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`
 }

@@ -386,7 +386,18 @@ export function TxtReader({ book, onProgress }: Props) {
         >
           {book.format === 'md' ? (
             <div className="prose prose-lg max-w-none dark:prose-invert" style={{ color: 'inherit' }}>
-              <ReactMarkdown>{currentPage}</ReactMarkdown>
+              <ReactMarkdown
+                components={{
+                  // Strip potentially dangerous attributes from HTML tags
+                  a: ({ href, children, ...props }) => (
+                    <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+                      {children}
+                    </a>
+                  ),
+                }}
+              >
+                {currentPage}
+              </ReactMarkdown>
             </div>
           ) : (
             currentPage.split(/\n\n+/).map((para, i) => renderParagraph(para, i))

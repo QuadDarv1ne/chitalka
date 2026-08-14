@@ -13,6 +13,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Loader2, Download, RefreshCw, FolderOpen } from 'lucide-react'
 import { saveBook, getAllBooks, type BookRecord } from '@/lib/library'
+import { hashFileHead } from './library'
 import {
   detectFormat,
   parseEpubMeta,
@@ -110,18 +111,13 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
     setProgress({ done: 0, total: toImport.length })
 
     try {
-      // Fetch existing hashes once to dedupe
+// Fetch existing hashes once to dedupe
       const existing = await getAllBooks(userId)
       const existingHashes = new Set(
         await Promise.all(
           existing.map(async (b) => {
             try {
-              const head = await b.blob.slice(0, 64 * 1024).arrayBuffer()
-              const digest = await crypto.subtle.digest('SHA-256', head)
-              const bytes = new Uint8Array(digest)
-              let hex = ''
-              for (const byte of bytes) hex += byte.toString(16).padStart(2, '0')
-              return hex
+              return await hashFileHead(b.blob)
             } catch {
               return `${b.title}\u0000${b.size}`
             }
@@ -158,11 +154,7 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
             dedupeBlob = new Blob([textContent], { type: 'text/plain' })
           }
 
-          const head = await dedupeBlob.slice(0, 64 * 1024).arrayBuffer()
-          const digest = await crypto.subtle.digest('SHA-256', head)
-          const bytes = new Uint8Array(digest)
-          let hex = ''
-          for (const byte of bytes) hex += byte.toString(16).padStart(2, '0')
+          const hex = await hashFileHead(dedupeBlob)
           if (existingHashes.has(hex)) {
             setProgress((p) => ({ ...p, done: p.done + 1 }))
             continue

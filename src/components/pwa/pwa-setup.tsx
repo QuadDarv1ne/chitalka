@@ -38,10 +38,10 @@ export function PwaSetup() {
     // Register service worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker
-          .register('/api/sw')
-          .then((reg) => console.log('SW registered:', reg.scope))
-          .catch((err) => console.error('SW registration failed:', err))
+        navigator.serviceWorker.register('/api/sw').catch(() => {
+          // SW registration can fail in private mode / unsupported browsers —
+          // the app still works fully (online), just without offline caching.
+        })
       })
     }
   }, [])

@@ -48,6 +48,8 @@ export function AudioReader({ book, onProgress }: Props) {
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const trackRef = useRef(currentTrack)
+  const currentTrackRef = useRef(currentTrack)
+  currentTrackRef.current = currentTrack
   const onProgressRef = useRef(onProgress)
   onProgressRef.current = onProgress
   const playingRef = useRef(false)
@@ -152,10 +154,7 @@ export function AudioReader({ book, onProgress }: Props) {
       audio.removeEventListener('play', onPlay)
       audio.removeEventListener('pause', onPause)
     }
-  }, [tracks.length])
-
-  const currentTrackRef = useRef(currentTrack)
-  currentTrackRef.current = currentTrack
+}, [tracks.length])
 
   // Restore position when track changes; count user-initiated track flips
   useEffect(() => {

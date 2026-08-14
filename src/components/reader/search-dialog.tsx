@@ -147,9 +147,9 @@ export function SearchDialog({ book }: Props) {
             const page = await doc.getPage(i)
             const content = await page.getTextContent()
             // pdfjs-dist v6: getTextContent returns items array with TextItem objects
-            const text = content.items
-              .filter((item: any): item is { str: string } => 'str' in item)
-              .map((item) => item.str)
+            const text = (content.items as any[])
+              .filter((item) => 'str' in item)
+              .map((item: any) => item.str)
               .join(' ')
             const lower = text.toLowerCase()
             const idx = lower.indexOf(q)

@@ -63,7 +63,7 @@ export async function POST(req: Request) {
         where: { userId: user.id, usedAt: null },
       })
 
-      const token = dummyToken
+const token = dummyToken
       const expiresAt = new Date(Date.now() + RESET_DURATION_MS)
       await db.passwordReset.create({
         data: {
@@ -72,6 +72,8 @@ export async function POST(req: Request) {
           expiresAt,
         },
       })
+
+      resetLink = `${getAppBaseUrl(req)}/?reset=${token}`
 
       const escapedName = escapeHtml(user.name || '')
       const html = `
@@ -113,9 +115,7 @@ ${resetLink}
 
 Ссылка действительна 1 час. Если вы не запрашивали сброс пароля — просто проигнорируйте это письмо.`
 
-      try {
-        resetLink = `${getAppBaseUrl(req)}/?reset=${token}`
-
+try {
         await sendEmail({
           to: normalizedEmail,
           subject: 'Восстановление пароля — Читалка',

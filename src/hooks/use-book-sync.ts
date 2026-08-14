@@ -47,7 +47,7 @@ export async function syncBooksToServer(books: BookRecord[]): Promise<number | n
 export function useBookSync(books: BookRecord[]) {
   const { user } = useAuth()
   const lastSyncRef = useRef(0)
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const booksRef = useRef(books)
   const intervalRef = useRef(BASE_INTERVAL)
   const disabledRef = useRef(false)
