@@ -263,6 +263,13 @@ export function TocPanel({ book, onNavigate }: Props) {
           new CustomEvent('pdf-goto-page', { detail: pageNum }),
         )
       }
+    } else if (book.format === 'mp3') {
+      const trackIdx = parseInt(item.href, 10)
+      if (!isNaN(trackIdx)) {
+        window.dispatchEvent(
+          new CustomEvent('audio-goto-track', { detail: trackIdx }),
+        )
+      }
     } else {
       window.dispatchEvent(
         new CustomEvent('txt-goto', { detail: item.label }),

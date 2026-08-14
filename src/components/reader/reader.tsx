@@ -304,15 +304,17 @@ export function Reader() {
         </div>
 
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSearchOpen(true)}
-            aria-label="Поиск"
-            title="Поиск (Ctrl+F)"
-          >
-            <Search className="h-4 w-4" />
-          </Button>
+          {book.format !== 'mp3' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Поиск"
+              title="Поиск (Ctrl+F)"
+            >
+              <Search className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"

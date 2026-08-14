@@ -307,6 +307,18 @@ export function AudioReader({ book, onProgress }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [prevTrack, nextTrack, togglePlay])
 
+  // TOC navigation: jump to a specific track by index
+  useEffect(() => {
+    const onGotoTrack = (e: Event) => {
+      const idx = (e as CustomEvent<number>).detail
+      if (typeof idx === 'number') {
+        setCurrentTrack(Math.max(0, Math.min(idx, tracks.length - 1)))
+      }
+    }
+    window.addEventListener('audio-goto-track', onGotoTrack)
+    return () => window.removeEventListener('audio-goto-track', onGotoTrack)
+  }, [tracks.length])
+
   const seek = useCallback((time: number) => {
     const audio = audioRef.current
     if (!audio) return

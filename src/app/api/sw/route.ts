@@ -7,7 +7,7 @@ export function GET() {
  * Caches the app shell and allows reading cached books offline
  */
 
-const CACHE_NAME = 'chitalka-v1'
+const CACHE_NAME = 'chitalka-v2'
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -18,7 +18,11 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS)
+      return cache.addAll(STATIC_ASSETS).catch(() => {
+        // One of the assets may be unavailable (e.g. during a partial
+        // deployment) — a failed addAll would abort the install and leave
+        // the old worker active. Swallow it: offline caching just degrades.
+      })
     }),
   )
   // Activate immediately
@@ -40,35 +44,54 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
-// Fetch event - serve from cache, fall back to network
+// Fetch event:
+//  - navigations: network-first (fresh app shell, stale fallback offline)
+//  - static assets: cache-first with runtime fill (offline-friendly)
 self.addEventListener('fetch', (event) => {
+  const request = event.request
   // Skip non-GET requests
-  if (event.request.method !== 'GET') return
+  if (request.method !== 'GET') return
 
   // Skip API calls and external resources
-  if (event.request.url.includes('/api/') || event.request.url.includes('googleapis.com')) return
+  if (request.url.includes('/api/') || request.url.includes('googleapis.com')) return
+
+  if (request.mode === 'navigate') {
+    // Network-first for pages: users must see the latest build when online.
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.status === 200 && response.type === 'basic') {
+            const responseToCache = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache))
+          }
+          return response
+        })
+        .catch(() => caches.match(request).then((cached) => cached || caches.match('/'))),
+    )
+    return
+  }
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
+    caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
         return cachedResponse
       }
 
       // Fetch from network and cache the response
-      return fetch(event.request).then((response) => {
+      return fetch(request).then((response) => {
         if (!response || response.status !== 200 || response.type !== 'basic') {
           return response
         }
 
         const responseToCache = response.clone()
         caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache)
+          cache.put(request, responseToCache)
         })
 
         return response
       }).catch(() => {
         // If offline and not cached, return the app shell
-        if (event.request.destination === 'document') {
+        if (request.destination === 'document') {
           return caches.match('/')
         }
       })
