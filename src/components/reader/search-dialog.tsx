@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Search } from 'lucide-react'
 import { useReaderStore } from '@/store/reader-store'
 import type { BookRecord } from '@/lib/library'
-import { PAGE_WORDS } from '@/lib/constants'
+import { paginateText } from '@/lib/pagination'
 import { initPdfWorker } from '@/lib/pdf-worker'
 import { decodeTextBlob } from '@/lib/text-encoding'
 
@@ -88,6 +88,13 @@ export function SearchDialog({ book }: Props) {
     return starts
   }, [textContent])
 
+  // Same pagination as the reader, so "Стр. N" matches where the user
+  // actually lands (chapter breaks flush pages early).
+  const textPageStarts = useMemo(() => {
+    if (!textContent) return []
+    return paginateText(textContent).pageStarts
+  }, [textContent])
+
   const search = useCallback(async () => {
     if (!query.trim()) {
       setResults([])
@@ -117,7 +124,13 @@ export function SearchDialog({ book }: Props) {
             else hi = mid
           }
           const wordOffset = lo
-          const pageNum = Math.floor(wordOffset / PAGE_WORDS) + 1
+          let pageNum = 1
+          for (let i = textPageStarts.length - 1; i >= 0; i--) {
+            if (textPageStarts[i] <= wordOffset) {
+              pageNum = i + 1
+              break
+            }
+          }
           const start = Math.max(0, idx - 50)
           const end = Math.min(textContent.length, idx + query.length + 50)
           const snippet =
@@ -215,7 +228,7 @@ export function SearchDialog({ book }: Props) {
     } finally {
       if (searchSeqRef.current === seq) setLoading(false)
     }
-  }, [query, book, textContent, textLoaded, wordStarts])
+  }, [query, book, textContent, textLoaded, wordStarts, textPageStarts])
 
   const goTo = useCallback(
     (result: SearchResult) => {

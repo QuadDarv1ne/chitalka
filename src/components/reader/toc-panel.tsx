@@ -8,6 +8,7 @@ import type { BookRecord } from '@/lib/library'
 import { Button } from '@/components/ui/button'
 import { initPdfWorker } from '@/lib/pdf-worker'
 import { decodeTextBlob } from '@/lib/text-encoding'
+import { extractAudioTracks } from '@/lib/book-parser'
 
 interface TocItem {
   id: string
@@ -133,6 +134,40 @@ export function TocPanel({ book, onNavigate }: Props) {
         } finally {
           // pdfjs-dist v6+ destroy() returns Promise<void> — fire-and-forget
           doc?.destroy?.()
+        }
+      } else if (book.format === 'mp3') {
+        // Audio books: build TOC from the track list (or a single chapter
+        // for a plain MP3 file) instead of decoding binary audio as text.
+        try {
+          const isZip =
+            book.blob.type === 'application/zip' ||
+            book.blob.type === 'application/x-zip-compressed'
+          let tracks: { name: string }[] = []
+          if (isZip) {
+            tracks = (await extractAudioTracks(book.blob)).map((t) => ({ name: t.name }))
+          }
+          const items: TocItem[] =
+            tracks.length > 0
+              ? tracks.map((t, i) => ({
+                  id: crypto.randomUUID(),
+                  href: String(i),
+                  label: `Глава ${i + 1}. ${t.name.replace(/\.mp3$/i, '')}`,
+                  level: 0,
+                }))
+              : [
+                  {
+                    id: crypto.randomUUID(),
+                    href: '0',
+                    label: 'Глава 1',
+                    level: 0,
+                  },
+                ]
+          if (!cancelled) {
+            cacheToc(book.id, items)
+            setToc(items)
+          }
+        } catch (e) {
+          logger.error(e)
         }
       } else {
         // For text/markdown/fb2, generate TOC from headings

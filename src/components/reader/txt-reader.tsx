@@ -13,8 +13,8 @@ import {
   Play,
 } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
-import { PAGE_WORDS } from '@/lib/constants'
 import { decodeTextBlob } from '@/lib/text-encoding'
+import { paginateText, findPageForPosition as findPageInStarts } from '@/lib/pagination'
 import {
   useReaderStore,
   fontFamilyCss,
@@ -72,59 +72,17 @@ export function TxtReader({ book, onProgress }: Props) {
   }, [book.id, book.blob])
 
   // Split into pages (by words, with chapter breaks).
-  // Records each page's cumulative word offset, so positions can be mapped
-  // to the exact page — chapter breaks flush pages early, so `page*PAGE_WORDS`
-  // does not describe where a page actually begins.
-  const [pages, pageStarts] = useMemo(() => {
-    if (!content) return [[], []] as const
-    const isChapterStart = (line: string) =>
-      /^(#{1,2})\s+/.test(line) ||
-      /^(Глава|Часть|Раздел|Пролог|Эпилог|Chapter|Part|Section|Prologue|Epilogue)\s+([IVX]+|\d+)/i.test(line)
-
-    const paragraphs = content.split(/\n\n+/).filter(Boolean)
-    const result: string[] = []
-    const starts: number[] = []
-    let current = ''
-    let words = 0
-    let cumulative = 0
-    let pageStart = 0
-    const flush = () => {
-      if (current) {
-        result.push(current)
-        starts.push(pageStart)
-        current = ''
-        words = 0
-      }
-    }
-    for (const p of paragraphs) {
-      const pWords = p.split(/\s+/).filter(Boolean).length
-      const firstLine = p.split('\n')[0] ?? ''
-      const isChapter = isChapterStart(firstLine)
-      if (current && (isChapter || words + pWords > PAGE_WORDS)) flush()
-      if (!current) pageStart = cumulative
-      current = current ? `${current}\n\n${p}` : p
-      words += pWords
-      cumulative += pWords
-    }
-    if (current) {
-      result.push(current)
-      starts.push(pageStart)
-    }
-    return [result, starts] as const
+  const [pages, pageStarts] = useMemo<[string[], number[]]>(() => {
+    if (!content) return [[], []]
+    const { pages, pageStarts } = paginateText(content)
+    return [pages, pageStarts]
   }, [content])
 
   const totalPages = pages.length
 
-  // Map a word position to the page containing it (falls back to the last page)
-  const findPageForPosition = useCallback(
-    (pos: number): number => {
-      for (let i = 0; i < totalPages; i++) {
-        const end = i + 1 < totalPages ? pageStarts[i + 1] : Infinity
-        if (pos >= pageStarts[i] && pos < end) return i
-      }
-      return Math.max(0, totalPages - 1)
-    },
-    [totalPages, pageStarts],
+  const findPageForPositionCb = useCallback(
+    (pos: number): number => findPageInStarts(pageStarts, pos),
+    [pageStarts],
   )
 
   // Restore the saved position once the book is paginated
@@ -134,9 +92,9 @@ export function TxtReader({ book, onProgress }: Props) {
     if (book.textPosition) {
       positionRestoredRef.current = true
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPage(findPageForPosition(book.textPosition))
+      setPage(findPageForPositionCb(book.textPosition))
     }
-  }, [totalPages, book.textPosition, findPageForPosition])
+  }, [totalPages, book.textPosition, findPageForPositionCb])
 
   // Clamp the restored page once the book is paginated (content may load
   // with a stale position that exceeds the page count)
@@ -203,7 +161,7 @@ export function TxtReader({ book, onProgress }: Props) {
     const onGotoPosition = (e: Event) => {
       const pos = (e as CustomEvent<number>).detail
       if (typeof pos === 'number') {
-        setPage(findPageForPosition(pos))
+        setPage(findPageForPositionCb(pos))
         containerRef.current?.scrollTo({ top: 0 })
       }
     }
@@ -223,7 +181,7 @@ export function TxtReader({ book, onProgress }: Props) {
       window.removeEventListener('txt-goto-position', onGotoPosition)
       window.removeEventListener('txt-goto', onGotoLabel)
     }
-  }, [findPageForPosition, pages, totalPages])
+  }, [findPageForPositionCb, pages])
 
   // Text selection → show color picker
   useEffect(() => {
