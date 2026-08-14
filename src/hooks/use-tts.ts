@@ -7,6 +7,8 @@ interface TTSState {
   paused: boolean
   currentChunk: number
   totalChunks: number
+  /** Char offset of the current chunk within the original spoken text. */
+  currentChunkStart: number
 }
 
 /**
@@ -19,6 +21,7 @@ export function useTTS() {
     paused: false,
     currentChunk: 0,
     totalChunks: 0,
+    currentChunkStart: 0,
   })
   const chunksRef = useRef<string[]>([])
   const utterancesRef = useRef<SpeechSynthesisUtterance[]>([])
@@ -40,22 +43,30 @@ export function useTTS() {
     }
   }, [])
 
-  const splitIntoChunks = (text: string): string[] => {
-    // Split by sentence boundaries, keep chunks <= 220 chars
-    const sentences = text.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [text]
-    const chunks: string[] = []
+  const splitIntoChunks = (text: string): { text: string; start: number }[] => {
+    // Split by sentence boundaries, keep chunks <= 220 chars.
+    // Each chunk records the char offset of its first non-whitespace char
+    // in the original text, so callers can map it back to the source.
+    const sentenceRegex = /[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g
+    const chunks: { text: string; start: number }[] = []
     let current = ''
-    for (const s of sentences) {
-      const trimmed = s.trim()
+    let currentStart = 0
+    let m: RegExpExecArray | null
+    while ((m = sentenceRegex.exec(text)) !== null) {
+      const trimmed = m[0].trim()
       if (!trimmed) continue
+      const leading = m[0].length - m[0].trimStart().length
+      const sentenceStart = m.index + leading
       if ((current + ' ' + trimmed).length > 220 && current) {
-        chunks.push(current)
+        chunks.push({ text: current, start: currentStart })
         current = trimmed
+        currentStart = sentenceStart
       } else {
+        if (!current) currentStart = sentenceStart
         current = current ? `${current} ${trimmed}` : trimmed
       }
     }
-    if (current) chunks.push(current)
+    if (current) chunks.push({ text: current, start: currentStart })
     return chunks
   }
 
@@ -70,7 +81,8 @@ export function useTTS() {
     voiceRef.current = opts?.voice ?? null
 
     const chunks = splitIntoChunks(text)
-    chunksRef.current = chunks
+    const starts = chunks.map((c) => c.start)
+    chunksRef.current = chunks.map((c) => c.text)
     if (chunks.length === 0) return
 
     setState({
@@ -78,16 +90,23 @@ export function useTTS() {
       paused: false,
       currentChunk: 0,
       totalChunks: chunks.length,
+      currentChunkStart: starts[0] ?? 0,
     })
 
     const utterances: SpeechSynthesisUtterance[] = chunks.map((chunk, i) => {
-      const u = new SpeechSynthesisUtterance(chunk)
+      const u = new SpeechSynthesisUtterance(chunk.text)
       u.rate = rateRef.current
       u.lang = 'ru-RU'
       if (voiceRef.current) u.voice = voiceRef.current
       u.onstart = () => {
         if (sessionRef.current !== sessionId || cancelledRef.current) return
-        setState((s) => ({ ...s, currentChunk: i, speaking: true, paused: false }))
+        setState((s) => ({
+          ...s,
+          currentChunk: i,
+          speaking: true,
+          paused: false,
+          currentChunkStart: starts[i] ?? 0,
+        }))
       }
       u.onend = () => {
         if (sessionRef.current !== sessionId || cancelledRef.current) return
@@ -100,6 +119,7 @@ export function useTTS() {
             paused: false,
             currentChunk: 0,
             totalChunks: 0,
+            currentChunkStart: 0,
           })
         }
       }
@@ -110,6 +130,7 @@ export function useTTS() {
           paused: false,
           currentChunk: 0,
           totalChunks: 0,
+          currentChunkStart: 0,
         })
       }
       return u
@@ -142,6 +163,7 @@ export function useTTS() {
         paused: false,
         currentChunk: 0,
         totalChunks: 0,
+        currentChunkStart: 0,
       })
     }
   }, [])

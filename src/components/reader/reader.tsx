@@ -110,9 +110,14 @@ export function Reader() {
   // Push the final progress to the server when the reader closes or the tab
   // is hidden/closed — progress made while the library was unmounted is not lost.
   const bookIdRef = useRef<string | null>(null)
+  const bookMetaRef = useRef<{ format: BookRecord['format']; size: number }>({
+    format: 'txt',
+    size: 0,
+  })
   useEffect(() => {
     bookIdRef.current = book?.id ?? null
-  }, [book?.id])
+    if (book) bookMetaRef.current = { format: book.format, size: book.size }
+  }, [book?.id, book])
   useEffect(() => {
     const flushSync = () => {
       const id = bookIdRef.current
@@ -156,6 +161,12 @@ export function Reader() {
         audioTrack: extra?.audioTrack,
         audioTime: extra?.audioTime,
       }).catch((e) => logger.error('Progress save failed', e))
+      // Keep the "Осталось" estimate live as the user reads
+      const { format, size } = bookMetaRef.current
+      const readingSpeed = useReaderStore.getState().settings.readingSpeed as ReadingSpeed
+      const wpm = getWordsPerMinute(readingSpeed)
+      const remaining = estimateRemainingMinutes(format, size, p, wpm)
+      setEstimatedRemainingMinutes(remaining)
     },
     [],
   )
@@ -184,6 +195,8 @@ export function Reader() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      // Don't hijack keys while a dialog/sheet (search, settings, TOC) is open
+      if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault()
         setSearchOpen(true)
@@ -193,6 +206,17 @@ export function Reader() {
         window.dispatchEvent(new CustomEvent('reader:add-bookmark'))
         setBookmarksOpen(true)
         setActiveTab('bookmarks')
+      } else if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault()
+        const { settings, updateSettings } = useReaderStore.getState()
+        updateSettings({ fontSize: Math.min(28, settings.fontSize + 1) })
+      } else if ((e.metaKey || e.ctrlKey) && (e.key === '-' || e.key === '_')) {
+        e.preventDefault()
+        const { settings, updateSettings } = useReaderStore.getState()
+        updateSettings({ fontSize: Math.max(12, settings.fontSize - 1) })
+      } else if ((e.metaKey || e.ctrlKey) && e.key === '0') {
+        e.preventDefault()
+        useReaderStore.getState().updateSettings({ fontSize: 18 })
       } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
         toggleFullscreen()
       } else if (e.key === '?') {

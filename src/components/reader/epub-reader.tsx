@@ -100,7 +100,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
           logger.warn('EPUB: CFI invalid, opening from the start')
           await rendition.display()
         }
-if (disposed) return
+        if (disposed) return
         renderedRef.current = true
         setReady(true)
         updateNavButtons()

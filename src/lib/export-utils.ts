@@ -17,12 +17,35 @@ export interface BackupData {
     lastOpenedAt: string | null
     progress: number
     description?: string
+    rating?: number
   }>
   settings: ReaderSettings
   bookmarks: Bookmark[]
   highlights: Highlight[]
   notes: BookNote[]
   sessions: ReadingSession[]
+}
+
+/**
+ * Download the original book file (the stored blob) back to disk.
+ * FB2 is stored as converted plain text, so it downloads as .txt.
+ */
+export function downloadBookFile(book: BookRecord): void {
+  const safeName = book.title
+    .replace(/[^\wа-яА-ЯёЁ\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+  const isZip = book.blob.type === 'application/zip' || book.blob.type === 'application/x-zip-compressed'
+  const ext =
+    book.format === 'fb2' ? 'txt' : book.format === 'mp3' && isZip ? 'mp3.zip' : book.format
+  const url = URL.createObjectURL(book.blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${safeName || 'book'}.${ext}`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 /**
@@ -143,6 +166,7 @@ export async function exportLibraryBackup(
     lastOpenedAt: b.lastOpenedAt,
     progress: b.progress,
     description: b.description,
+    rating: b.rating,
   }))
   const backup = {
     version: 3,

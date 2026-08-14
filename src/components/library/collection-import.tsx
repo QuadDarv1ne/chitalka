@@ -1,7 +1,7 @@
 'use client'
 
 import { logger } from '@/lib/logger'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,7 +11,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Loader2, Download, RefreshCw, FolderOpen } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Loader2, Download, RefreshCw, FolderOpen, Search } from 'lucide-react'
 import { saveBook, getAllBooks, type BookRecord } from '@/lib/library'
 import { hashFileHead } from './library'
 import {
@@ -56,11 +57,18 @@ const FORMAT_LABELS: Record<string, string> = {
 export function CollectionImport({ open, onOpenChange, userId, onImported }: Props) {
   const [files, setFiles] = useState<CollectionFile[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const [importing, setImporting] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [error, setError] = useState<string | null>(null)
   const importCancelled = useRef(false)
+
+  const filteredFiles = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return files
+    return files.filter((f) => f.name.toLowerCase().includes(q))
+  }, [files, search])
 
   const loadManifest = useCallback(async () => {
     setLoading(true)
@@ -83,6 +91,7 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
   useEffect(() => {
     if (open) {
       importCancelled.current = false
+      setSearch('')
       loadManifest()
     }
   }, [open, loadManifest])
@@ -97,7 +106,16 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
   }
 
   const toggleAll = () => {
-    setSelected((prev) => (prev.size === files.length ? new Set() : new Set(files.map((f) => f.name))))
+    const allSelected = filteredFiles.length > 0 && filteredFiles.every((f) => selected.has(f.name))
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (allSelected) {
+        for (const f of filteredFiles) next.delete(f.name)
+      } else {
+        for (const f of filteredFiles) next.add(f.name)
+      }
+      return next
+    })
   }
 
   const handleImport = async () => {
@@ -111,7 +129,7 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
     setProgress({ done: 0, total: toImport.length })
 
     try {
-// Fetch existing hashes once to dedupe
+      // Fetch existing hashes once to dedupe
       const existing = await getAllBooks(userId)
       const existingHashes = new Set(
         await Promise.all(
@@ -219,12 +237,28 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
           </DialogDescription>
         </DialogHeader>
 
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Поиск по файлам..."
+            className="pl-9"
+            disabled={loading}
+          />
+        </div>
+
         <div className="flex items-center justify-between px-1">
-          <Button variant="ghost" size="sm" onClick={toggleAll} className="text-xs" disabled={files.length === 0}>
-            {selected.size === files.length && files.length > 0
+          <Button variant="ghost" size="sm" onClick={toggleAll} className="text-xs" disabled={filteredFiles.length === 0}>
+            {filteredFiles.length > 0 && filteredFiles.every((f) => selected.has(f.name))
               ? 'Снять все'
               : 'Выбрать все'}
           </Button>
+          {search.trim() && (
+            <span className="text-xs text-muted-foreground">
+              Показано {filteredFiles.length} из {files.length}
+            </span>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -249,9 +283,13 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
                 {error ?? 'В коллекции нет файлов'}
               </p>
             </div>
+          ) : filteredFiles.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2 text-center px-4">
+              <p className="text-sm text-muted-foreground">Ничего не найдено</p>
+            </div>
           ) : (
             <div className="divide-y">
-              {files.map((file) => {
+              {filteredFiles.map((file) => {
                 const checked = selected.has(file.name)
                 const formatLabel = FORMAT_LABELS[file.format] ?? file.format.toUpperCase()
                 return (

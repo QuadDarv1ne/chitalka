@@ -14,11 +14,25 @@ import {
   Volume2,
   VolumeX,
   Headphones,
+  Timer,
+  X,
 } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
 import { extractAudioTracks, type AudioTrack } from '@/lib/book-parser'
 import { useReadingTracker } from '@/hooks/use-reading-tracker'
 import { useReaderStore } from '@/store/reader-store'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { toast } from 'sonner'
+
+// Sleep timer presets (minutes). 0 = off.
+const SLEEP_TIMER_OPTIONS = [0, 10, 20, 30, 45, 60, 90]
 
 interface Props {
   book: BookRecord
@@ -45,6 +59,9 @@ export function AudioReader({ book, onProgress }: Props) {
   const [playbackRate, setPlaybackRate] = useState(1)
   const [pagesFlipped, setPagesFlipped] = useState(0)
   const [trackUrls, setTrackUrls] = useState<string[]>([])
+  // Sleep timer: sleepEndsAt is a timestamp (ms) when playback should pause.
+  const [sleepEndsAt, setSleepEndsAt] = useState<number | null>(null)
+  const [sleepRemaining, setSleepRemaining] = useState<number>(0)
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const trackRef = useRef(currentTrack)
@@ -57,7 +74,9 @@ export function AudioReader({ book, onProgress }: Props) {
   const didRestoreRef = useRef(false)
   const settings = useReaderStore((s) => s.settings)
 
-  useReadingTracker(book.id, pagesFlipped)
+  // Track reading time only while audio is actually playing — a paused
+  // session (manual pause, sleep timer) must not be credited as reading time.
+  useReadingTracker(book.id, pagesFlipped, isPlaying)
 
   // Extract tracks from ZIP or use single MP3
   useEffect(() => {
@@ -130,6 +149,9 @@ export function AudioReader({ book, onProgress }: Props) {
         setCurrentTrack(currentTrackRef.current + 1)
       } else {
         setIsPlaying(false)
+        // The book ended on its own — a pending sleep timer is moot
+        setSleepEndsAt(null)
+        setSleepRemaining(0)
       }
     }
     const onPlay = () => {
@@ -209,6 +231,36 @@ export function AudioReader({ book, onProgress }: Props) {
     audio.muted = muted
     audio.playbackRate = playbackRate
   }, [volume, muted, playbackRate])
+
+  // Sleep timer countdown: tick every second, pause when the time is up.
+  useEffect(() => {
+    if (!sleepEndsAt) return
+    const tick = () => {
+      const remaining = sleepEndsAt - Date.now()
+      setSleepRemaining(Math.max(0, Math.ceil(remaining / 1000)))
+      if (remaining <= 0) {
+        setSleepEndsAt(null)
+        setSleepRemaining(0)
+        audioRef.current?.pause()
+        toast.success('Таймер сна: воспроизведение остановлено')
+      }
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [sleepEndsAt])
+
+  // Set the sleep timer to `minutes` from now (0 disables it).
+  const setSleepTimer = useCallback((minutes: number) => {
+    if (minutes <= 0) {
+      setSleepEndsAt(null)
+      setSleepRemaining(0)
+      return
+    }
+    setSleepEndsAt(Date.now() + minutes * 60000)
+    setSleepRemaining(minutes * 60)
+    toast.success(`Таймер сна: ${minutes} мин`)
+  }, [])
 
   // Sync progress
   useEffect(() => {
@@ -439,7 +491,50 @@ export function AudioReader({ book, onProgress }: Props) {
           >
             {playbackRate}x
           </Button>
+
+          {/* Sleep timer */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={sleepEndsAt ? 'default' : 'outline'}
+                size="sm"
+                className="gap-1.5"
+                aria-label="Таймер сна"
+                title="Таймер сна"
+              >
+                <Timer className="h-3.5 w-3.5" />
+                {sleepEndsAt ? formatTime(sleepRemaining) : 'Сон'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel>Таймер сна</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {SLEEP_TIMER_OPTIONS.map((minutes) => (
+                <DropdownMenuItem
+                  key={minutes}
+                  onClick={() => setSleepTimer(minutes)}
+                  className={sleepEndsAt !== null && minutes === 0 ? 'text-destructive' : ''}
+                >
+                  {minutes === 0 ? 'Выключить' : `${minutes} мин`}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
+
+        {/* Active sleep timer banner */}
+        {sleepEndsAt !== null && (
+          <button
+            onClick={() => setSleepTimer(0)}
+            className="flex items-center gap-2 rounded-full border px-3 py-1 text-xs opacity-80 hover:opacity-100 transition-opacity"
+            style={{ borderColor: 'color-mix(in srgb, var(--reader-fg) 20%, transparent)' }}
+            title="Отключить таймер сна"
+          >
+            <Timer className="h-3 w-3" />
+            <span className="tabular-nums">Остановится через {formatTime(sleepRemaining)}</span>
+            <X className="h-3 w-3" />
+          </button>
+        )}
 
         {/* Track list */}
         {tracks.length > 1 && (

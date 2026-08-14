@@ -32,11 +32,21 @@ import {
   Download,
   Loader2,
   FolderOpen,
+  Info,
+  CalendarDays,
+  HardDrive,
+  BookOpenCheck,
+  Target,
+  Flame,
+  Check,
+  Star,
+  RotateCcw,
 } from 'lucide-react'
 import {
   getAllBooks,
   saveBook,
   deleteBook,
+  updateBook,
   reassignBooksToUser,
   type BookRecord,
 } from '@/lib/library'
@@ -49,7 +59,14 @@ import {
   parseFb2Content,
   parseAudioMeta,
 } from '@/lib/book-parser'
-import { useReaderStore, type Theme } from '@/store/reader-store'
+import {
+  useReaderStore,
+  type Theme,
+  type Bookmark,
+  type Highlight,
+  type ReadingSession,
+  localDateString,
+} from '@/store/reader-store'
 import { getWordsPerMinute } from '@/store/reader-store'
 import { estimateRemainingMinutes, formatMinutes } from '@/lib/constants'
 import { useAuth } from '@/hooks/use-auth'
@@ -64,14 +81,27 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { motion, AnimatePresence } from 'framer-motion'
-import { exportLibraryBackup, parseLibraryBackup } from '@/lib/export-utils'
+import { exportLibraryBackup, parseLibraryBackup, downloadBookFile } from '@/lib/export-utils'
 import { UserMenu } from '@/components/auth/user-menu'
 import { CollectionImport } from './collection-import'
 
-type SortKey = 'recent' | 'title' | 'added'
+type SortKey = 'recent' | 'title' | 'added' | 'progress'
 type FormatFilter = 'all' | 'epub' | 'pdf' | 'txt' | 'md' | 'fb2' | 'html' | 'mp3'
+type StatusFilter = 'all' | 'reading' | 'finished'
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500 MB (includes large audiobooks)
+
+const FORMAT_BADGES: Record<string, { label: string; color: string }> = {
+  epub: { label: 'EPUB', color: 'bg-green-600 text-white' },
+  pdf: { label: 'PDF', color: 'bg-red-600 text-white' },
+  txt: { label: 'TXT', color: 'bg-blue-600 text-white' },
+  md: { label: 'MD', color: 'bg-purple-600 text-white' },
+  html: { label: 'HTML', color: 'bg-orange-600 text-white' },
+  fb2: { label: 'FB2', color: 'bg-cyan-600 text-white' },
+  mp3: { label: 'MP3', color: 'bg-amber-600 text-white' },
+}
+
+const isFinished = (progress?: number) => progress !== undefined && progress >= 0.99
 
 export function Library() {
   const [books, setBooks] = useState<BookRecord[]>([])
@@ -79,10 +109,12 @@ export function Library() {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<SortKey>('recent')
   const [formatFilter, setFormatFilter] = useState<FormatFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [dragOver, setDragOver] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<BookRecord | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [collectionOpen, setCollectionOpen] = useState(false)
+  const [detailsTarget, setDetailsTarget] = useState<BookRecord | null>(null)
   const dragDepth = useRef(0)
   const fileInput = useRef<HTMLInputElement>(null)
   const openBook = useReaderStore((s) => s.openBook)
@@ -271,6 +303,29 @@ export function Library() {
     [refresh, removeBookData],
   )
 
+  const handleRate = useCallback(async (id: string, rating: number) => {
+    await updateBook(id, { rating }).catch((e) => logger.error('Rating save failed', e))
+    setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, rating } : b)))
+    toast.success(rating > 0 ? `Оценка: ${rating} из 5` : 'Рейтинг удалён')
+  }, [])
+
+  const handleResetProgress = useCallback(
+    async (id: string, title: string) => {
+      await updateBook(id, {
+        progress: 0,
+        cfi: undefined,
+        textPosition: undefined,
+        pdfPage: undefined,
+        audioTrack: undefined,
+        audioTime: undefined,
+        lastOpenedAt: undefined,
+      }).catch((e) => logger.error('Progress reset failed', e))
+      setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, progress: 0, lastOpenedAt: undefined } : b)))
+      toast.success(`Прогресс сброшен: ${title}`)
+    },
+    [],
+  )
+
   const handleRestore = useCallback(
     async (files: FileList | null) => {
       const file = files?.[0]
@@ -309,6 +364,11 @@ export function Library() {
 
   const filtered = useMemo(() => books
     .filter((b) => formatFilter === 'all' || b.format === formatFilter)
+    .filter((b) => {
+      if (statusFilter === 'finished') return isFinished(b.progress)
+      if (statusFilter === 'reading') return (b.progress ?? 0) > 0 && !isFinished(b.progress)
+      return true
+    })
     .filter(
       (b) =>
         b.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -317,8 +377,9 @@ export function Library() {
     .sort((a, b) => {
       if (sort === 'title') return a.title.localeCompare(b.title, 'ru')
       if (sort === 'added') return b.addedAt - a.addedAt
+      if (sort === 'progress') return (b.progress ?? 0) - (a.progress ?? 0)
       return (b.lastOpenedAt ?? 0) - (a.lastOpenedAt ?? 0)
-    }), [books, formatFilter, search, sort])
+    }), [books, formatFilter, statusFilter, search, sort])
 
   const stats = {
     total: books.length,
@@ -327,6 +388,29 @@ export function Library() {
     totalMinutes: sessions.reduce((s, sess) => s + sess.minutes, 0),
     highlights: highlights.length,
   }
+
+  // Daily reading goal widget (header): today's minutes vs the goal.
+  const todayDate = localDateString(new Date())
+  const todayMinutes = sessions
+    .filter((s) => s.date === todayDate)
+    .reduce((sum, s) => sum + s.minutes, 0)
+  const goalMinutes = settings.dailyGoalMinutes
+  const goalDone = todayMinutes >= goalMinutes
+
+  // Reading streak: consecutive days with at least one session.
+  const streak = useMemo(() => {
+    let count = 0
+    const today = new Date()
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(today)
+      d.setDate(d.getDate() - i)
+      const has = sessions.some((s) => s.date === localDateString(d))
+      if (has) count++
+      else if (i === 0) continue
+      else break
+    }
+    return count
+  }, [sessions])
 
   const formatCounts = books.reduce(
     (acc, b) => {
@@ -434,6 +518,25 @@ export function Library() {
               <BarChart3 className="h-4 w-4" />
             </Button>
 
+            {/* Daily goal pill — shows today's progress vs goal, click → stats */}
+            {books.length > 0 && (
+              <Button
+                variant={goalDone ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setView('stats')}
+                className="gap-1.5 tabular-nums hidden sm:flex"
+                title={`Цель: ${todayMinutes} из ${goalMinutes} мин${streak > 0 ? ` · Серия ${streak} дн.` : ''}`}
+              >
+                {goalDone ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Target className="h-3.5 w-3.5" />
+                )}
+                {todayMinutes}/{goalMinutes}
+                {streak > 0 && <Flame className="h-3.5 w-3.5 text-orange-500" />}
+              </Button>
+            )}
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon">
@@ -451,6 +554,9 @@ export function Library() {
                 <DropdownMenuItem onClick={() => setSort('title')}>
                   По названию
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSort('progress')}>
+                  По прогрессу чтения
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>Формат</DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => setFormatFilter('all')}>
@@ -461,6 +567,17 @@ export function Library() {
                     {f.toUpperCase()} {formatCounts[f] ? `(${formatCounts[f]})` : ''}
                   </DropdownMenuItem>
                 ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Статус</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => setStatusFilter('all')}>
+                  Все книги
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter('reading')}>
+                  В процессе чтения
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter('finished')}>
+                  Завершённые
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => restoreInput.current?.click()}
@@ -576,15 +693,21 @@ export function Library() {
                   <FileType className="h-4 w-4" /> {stats.highlights} выделений
                 </span>
               </div>
-              {formatFilter !== 'all' && (
+              {(formatFilter !== 'all' || statusFilter !== 'all') && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setFormatFilter('all')}
+                  onClick={() => {
+                    setFormatFilter('all')
+                    setStatusFilter('all')
+                  }}
                   className="gap-1 text-xs"
                 >
                   <X className="h-3 w-3" />
-                  Сбросить фильтр: {formatFilter.toUpperCase()}
+                  {formatFilter !== 'all' && `Формат: ${formatFilter.toUpperCase()}`}
+                  {formatFilter !== 'all' && statusFilter !== 'all' && ' · '}
+                  {statusFilter === 'reading' && 'В процессе'}
+                  {statusFilter === 'finished' && 'Завершённые'}
                 </Button>
               )}
             </div>
@@ -595,6 +718,7 @@ export function Library() {
                   book={book}
                   onOpen={() => openBook(book.id)}
                   onDelete={() => setDeleteTarget(book)}
+                  onDetails={() => setDetailsTarget(book)}
                 />
               ))}
             </div>
@@ -646,6 +770,30 @@ export function Library() {
         onOpenChange={setCollectionOpen}
         userId={userId}
         onImported={refresh}
+      />
+
+      {/* Book details — re-derive from live state so rating/progress changes show instantly */}
+      <BookDetailsDialog
+        book={books.find((b) => b.id === detailsTarget?.id) ?? detailsTarget}
+        sessions={sessions}
+        bookmarks={bookmarks}
+        highlights={highlights}
+        onClose={() => setDetailsTarget(null)}
+        onOpen={() => {
+          if (detailsTarget) {
+            setDetailsTarget(null)
+            openBook(detailsTarget.id)
+          }
+        }}
+        onRate={(rating) => {
+          if (detailsTarget) handleRate(detailsTarget.id, rating)
+        }}
+        onResetProgress={() => {
+          if (detailsTarget) handleResetProgress(detailsTarget.id, detailsTarget.title)
+        }}
+        onDownload={() => {
+          if (detailsTarget) downloadBookFile(detailsTarget)
+        }}
       />
     </div>
   )
@@ -710,22 +858,16 @@ const BookCard = memo(function BookCard({
   book,
   onOpen,
   onDelete,
+  onDetails,
 }: {
   book: BookRecord
   onOpen: () => void
   onDelete: () => void
+  onDetails: () => void
 }) {
-  const formatBadge: Record<string, { label: string; color: string }> = {
-    epub: { label: 'EPUB', color: 'bg-green-600 text-white' },
-    pdf: { label: 'PDF', color: 'bg-red-600 text-white' },
-    txt: { label: 'TXT', color: 'bg-blue-600 text-white' },
-    md: { label: 'MD', color: 'bg-purple-600 text-white' },
-    html: { label: 'HTML', color: 'bg-orange-600 text-white' },
-    fb2: { label: 'FB2', color: 'bg-cyan-600 text-white' },
-    mp3: { label: 'MP3', color: 'bg-amber-600 text-white' },
-  }
-  const badge = formatBadge[book.format]
+  const badge = FORMAT_BADGES[book.format]
   const stars = book.rating ? '★'.repeat(book.rating) + '☆'.repeat(5 - book.rating) : ''
+  const finished = isFinished(book.progress)
 
   return (
     <Card className="group relative overflow-hidden p-0 cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 duration-200" onClick={onOpen}>
@@ -744,13 +886,20 @@ const BookCard = memo(function BookCard({
             </span>
           </div>
         )}
-        <div className={`absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold ${badge.color}`}>
-          {badge.label}
+        <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${badge.color}`}>
+            {badge.label}
+          </span>
+          {finished && (
+            <span className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-green-600 text-white flex items-center gap-1">
+              <Check className="h-3 w-3" /> Прочитана
+            </span>
+          )}
         </div>
         {book.progress !== undefined && book.progress > 0 && (
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20">
             <div
-              className="h-full bg-primary"
+              className={`h-full ${finished ? 'bg-green-500' : 'bg-primary'}`}
               style={{ width: `${Math.round(book.progress * 100)}%` }}
             />
           </div>
@@ -760,16 +909,30 @@ const BookCard = memo(function BookCard({
             <BookOpen className="h-4 w-4 mr-1.5" /> Открыть
           </Button>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete()
-          }}
-          className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-destructive"
-          aria-label="Удалить"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <div className="absolute top-2 right-2 flex items-center gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onDetails()
+            }}
+            className="h-8 w-8 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-primary"
+            aria-label="Подробнее"
+            title="Информация о книге"
+          >
+            <Info className="h-4 w-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete()
+            }}
+            className="h-8 w-8 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-destructive"
+            aria-label="Удалить"
+            title="Удалить книгу"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
       <div className="p-3">
         <h3 className="font-medium text-sm line-clamp-2 leading-snug" title={book.title}>
@@ -837,6 +1000,219 @@ const ThemeSwitcher = memo(function ThemeSwitcher({ value, onChange }: { value: 
     </DropdownMenu>
   )
 })
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} Б`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`
+  return `${(bytes / 1024 / 1024).toFixed(1)} МБ`
+}
+
+function BookDetailsDialog({
+  book,
+  sessions,
+  bookmarks,
+  highlights,
+  onClose,
+  onOpen,
+  onRate,
+  onResetProgress,
+  onDownload,
+}: {
+  book: BookRecord | null
+  sessions: ReadingSession[]
+  bookmarks: Bookmark[]
+  highlights: Highlight[]
+  onClose: () => void
+  onOpen: () => void
+  onRate: (rating: number) => void
+  onResetProgress: () => void
+  onDownload: () => void
+}) {
+  const [hoverRating, setHoverRating] = useState(0)
+  if (!book) return null
+
+  const bookSessions = sessions.filter((s) => s.bookId === book.id)
+  const totalMinutes = bookSessions.reduce((sum, s) => sum + s.minutes, 0)
+  const totalPages = bookSessions.reduce((sum, s) => sum + s.pages, 0)
+  const bookBookmarks = bookmarks.filter((b) => b.bookId === book.id)
+  const bookHighlights = highlights.filter((h) => h.bookId === book.id)
+  const progress = book.progress ?? 0
+  const finished = isFinished(book.progress)
+  const badge = FORMAT_BADGES[book.format]
+
+  return (
+    <Dialog open={!!book} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Info className="h-5 w-5 text-muted-foreground" />
+            Информация о книге
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex gap-4">
+          {/* Cover */}
+          <div className="h-32 w-24 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
+            {book.cover ? (
+              <img src={book.cover} alt={book.title} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <FileText className="h-10 w-10 text-muted-foreground/50" />
+              </div>
+            )}
+          </div>
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-base leading-snug" title={book.title}>
+              {book.title}
+            </h3>
+            <p className="text-sm text-muted-foreground mt-0.5">{book.author}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${badge.color}`}>
+                {badge.label}
+              </span>
+              {finished && (
+                <span className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-green-600 text-white flex items-center gap-1">
+                  <Check className="h-3 w-3" /> Прочитана
+                </span>
+              )}
+              <div className="flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    onClick={() => onRate(star === book.rating ? 0 : star)}
+                    onMouseEnter={() => setHoverRating(star)}
+                    onMouseLeave={() => setHoverRating(0)}
+                    className="p-0.5 transition-transform hover:scale-110 focus:outline-none"
+                    aria-label={`Оценить на ${star} из 5`}
+                    title={`${star} из 5`}
+                  >
+                    <Star
+                      className={`h-4 w-4 ${
+                        star <= (hoverRating || book.rating || 0)
+                          ? 'fill-amber-400 text-amber-400'
+                          : 'text-muted-foreground/40'
+                      }`}
+                    />
+                  </button>
+                ))}
+                {book.rating !== undefined && book.rating > 0 && (
+                  <span className="text-xs text-muted-foreground ml-1">({book.rating})</span>
+                )}
+              </div>
+            </div>
+            {progress > 0 && (
+              <div className="mt-3">
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                  <span>Прогресс чтения</span>
+                  <span className="tabular-nums">{Math.round(progress * 100)}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={`h-full ${finished ? 'bg-green-500' : 'bg-primary'}`}
+                    style={{ width: `${Math.round(progress * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Description */}
+        {book.description && (
+          <div className="mt-2">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Описание</p>
+            <p className="text-sm leading-relaxed line-clamp-5 whitespace-pre-wrap">
+              {book.description}
+            </p>
+          </div>
+        )}
+
+        {/* Metadata grid */}
+        <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <HardDrive className="h-4 w-4" />
+            <span>{formatBytes(book.size)}</span>
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <CalendarDays className="h-4 w-4" />
+            <span>
+              {new Date(book.addedAt).toLocaleDateString('ru-RU', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </span>
+          </div>
+          {book.lastOpenedAt && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <BookOpenCheck className="h-4 w-4" />
+              <span>
+                Читали: {new Date(book.lastOpenedAt).toLocaleDateString('ru-RU')}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Reading stats */}
+        {(totalMinutes > 0 || totalPages > 0) && (
+          <div className="mt-2 grid grid-cols-4 gap-2 rounded-lg border p-3 text-center">
+            <div>
+              <p className="text-lg font-bold tabular-nums">{totalMinutes}</p>
+              <p className="text-[10px] text-muted-foreground">минут</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold tabular-nums">{totalPages}</p>
+              <p className="text-[10px] text-muted-foreground">страниц</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold tabular-nums">{bookBookmarks.length}</p>
+              <p className="text-[10px] text-muted-foreground">закладок</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold tabular-nums">{bookHighlights.length}</p>
+              <p className="text-[10px] text-muted-foreground">выделений</p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-between gap-2 mt-2">
+          <div className="flex gap-2">
+            {progress > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onResetProgress}
+                className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Сбросить прогресс
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDownload}
+              className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              title="Сохранить оригинальный файл книги"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Скачать файл
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Закрыть
+            </Button>
+            <Button onClick={onOpen} className="gap-1.5">
+              <BookOpen className="h-4 w-4" />
+              Открыть книгу
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 export async function hashFileHead(source: Blob): Promise<string> {
   const head = await source.slice(0, 64 * 1024).arrayBuffer()

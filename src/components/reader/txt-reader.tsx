@@ -325,6 +325,21 @@ export function TxtReader({ book, onProgress }: Props) {
     tts.speak(text, { rate: settings.ttsRate, voice })
   }
 
+  // Highlight the paragraph currently being spoken. Maps the TTS chunk's
+  // char offset (within the normalized spoken text) back to the paragraph,
+  // using the exact same normalization as handleTTS.
+  const ttsParaIndex = useMemo(() => {
+    if (!tts.speaking || book.format === 'md' || !currentPage) return -1
+    const paragraphs = currentPage.split(/\n\n+/)
+    let offset = 0
+    for (let i = 0; i < paragraphs.length; i++) {
+      const len = paragraphs[i].replace(/[#*_`>-]/g, '').replace(/\n+/g, ' ').length
+      if (tts.currentChunkStart < offset + len) return i
+      offset += len + 1
+    }
+    return paragraphs.length - 1
+  }, [tts.speaking, tts.currentChunkStart, currentPage, book.format])
+
   const readerStyle: React.CSSProperties = {
     background: 'var(--reader-bg)',
     color: 'var(--reader-fg)',
@@ -338,11 +353,25 @@ export function TxtReader({ book, onProgress }: Props) {
 
   const marginX = `${settings.margin * 1.5}rem`
 
+  // Keep the paragraph being read visible while TTS is speaking
+  useEffect(() => {
+    if (ttsParaIndex < 0) return
+    const el = containerRef.current?.querySelector(`[data-tts-index="${ttsParaIndex}"]`)
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [ttsParaIndex])
+
   // Render a paragraph with highlights
   const renderParagraph = (para: string, i: number) => {
     const segments = splitWithHighlights(para, pageHighlights)
+    const isSpoken = ttsParaIndex === i
     return (
-      <p key={i} className="mb-4 whitespace-pre-wrap">
+      <p
+        key={i}
+        data-tts-index={i}
+        className={`mb-4 whitespace-pre-wrap transition-colors duration-200 ${
+          isSpoken ? 'rounded-md bg-primary/10 px-2 ring-1 ring-primary/20 -mx-2' : ''
+        }`}
+      >
         {segments.map((seg, j) =>
           seg.highlight ? (
             <HighlightMark

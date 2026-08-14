@@ -15,7 +15,7 @@ import {
   Flame,
   Target,
 } from 'lucide-react'
-import { useReaderStore, localDateString, getWordsPerMinute } from '@/store/reader-store'
+import { useReaderStore, localDateString, getWordsPerMinute, type ReadingSession } from '@/store/reader-store'
 import { getAllBooks, type BookRecord } from '@/lib/library'
 import { UserMenu } from '@/components/auth/user-menu'
 import { useAuth } from '@/hooks/use-auth'
@@ -151,7 +151,7 @@ export function Stats() {
       </header>
 
       <div className="container mx-auto flex-1 px-4 md:px-8 py-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
           <StatCard
             icon={<Clock className="h-5 w-5" />}
             label="Всего часов"
@@ -269,6 +269,8 @@ export function Stats() {
           </div>
         </Card>
 
+        <ReadingHeatmap sessions={sessions} />
+
         {bookStats.length > 0 && (
           <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
@@ -355,6 +357,144 @@ function StatCard({
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
       <p className="text-2xl font-bold tabular-nums">{value}</p>
       <p className="text-xs text-muted-foreground mt-1">{sub}</p>
+    </Card>
+  )
+}
+
+const WEEKDAY_LABELS: Record<number, string> = { 1: 'Пн', 3: 'Ср', 5: 'Пт' }
+const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
+
+interface HeatDay {
+  date: string
+  minutes: number
+}
+
+/**
+ * GitHub-style contribution heatmap for the last ~52 weeks.
+ * Each column is a week (Sun–Sat), each cell a day, colored by reading minutes.
+ */
+function ReadingHeatmap({ sessions }: { sessions: ReadingSession[] }) {
+  const byDate = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const s of sessions) {
+      map.set(s.date, (map.get(s.date) ?? 0) + s.minutes)
+    }
+    return map
+  }, [sessions])
+
+  const weeks = useMemo(() => {
+    const today = new Date()
+    // Start ~52 weeks ago, aligned so the first column is a full Sun–Sat week
+    const start = new Date(today)
+    start.setDate(start.getDate() - 363)
+    start.setDate(start.getDate() - start.getDay())
+
+    const days: HeatDay[] = []
+    for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+      days.push({ date: localDateString(d), minutes: byDate.get(localDateString(d)) ?? 0 })
+    }
+    const cols: HeatDay[][] = []
+    for (let i = 0; i < days.length; i += 7) cols.push(days.slice(i, i + 7))
+    return cols
+  }, [byDate])
+
+  const totalDays = weeks.reduce((sum, w) => sum + w.filter((d) => d.minutes > 0).length, 0)
+  if (totalDays === 0) return null
+
+  const levelColor = (minutes: number): string => {
+    if (minutes <= 0) return 'var(--muted)'
+    const pct = minutes < 15 ? 25 : minutes < 30 ? 50 : minutes < 60 ? 75 : 100
+    return `color-mix(in srgb, var(--primary) ${pct}%, var(--background))`
+  }
+  const cellTitle = (d: HeatDay): string => {
+    const date = new Date(d.date + 'T00:00:00')
+    const label = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+    return d.minutes > 0 ? `${label}: ${d.minutes} мин` : label
+  }
+
+  return (
+    <Card className="p-6 mb-8">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-semibold">Активность за год</h2>
+          <p className="text-xs text-muted-foreground">Минуты чтения по дням</p>
+        </div>
+        <Calendar className="h-5 w-5 text-muted-foreground" />
+      </div>
+
+      <div className="flex">
+        {/* Weekday labels */}
+        <div className="flex flex-col mr-2 gap-[3px]">
+          {[0, 1, 2, 3, 4, 5, 6].map((row) => (
+            <span
+              key={row}
+              className="flex h-[11px] items-center text-[9px] leading-none text-muted-foreground"
+            >
+              {WEEKDAY_LABELS[row] ?? ''}
+            </span>
+          ))}
+        </div>
+
+        {/* Grid */}
+        <div className="overflow-x-auto flex-1 pb-2">
+          <div className="flex gap-[3px]" style={{ minWidth: weeks.length * 14 }}>
+            {weeks.map((week, wi) => {
+              const firstMonth = new Date(week[0].date + 'T00:00:00').getMonth()
+              const prevMonth =
+                wi > 0 ? new Date(weeks[wi - 1][0].date + 'T00:00:00').getMonth() : firstMonth
+              const showMonth = firstMonth !== prevMonth
+              return (
+                <div key={wi} className="flex flex-col gap-[3px]">
+                  <span className="flex h-[11px] items-center text-[9px] leading-none text-muted-foreground mb-[3px]">
+                    {showMonth ? MONTHS[firstMonth] : ''}
+                  </span>
+                  {week.map((d) => (
+                    <div
+                      key={d.date}
+                      title={cellTitle(d)}
+                      className="h-[11px] w-[11px] rounded-[2px]"
+                      style={{ background: levelColor(d.minutes) }}
+                    />
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer: summary + legend */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>
+          Читали {totalDays} дн. за год
+          {totalDays > 0 && (
+            <>
+              {' · '}
+              <span className="tabular-nums">
+                {(
+                  Math.round(
+                    (weeks.reduce((sum, w) => sum + w.reduce((s, d) => s + d.minutes, 0), 0) / 60) * 10,
+                  ) / 10
+                ).toLocaleString('ru-RU')}{' '}
+                ч
+              </span>
+            </>
+          )}
+        </span>
+        <div className="flex items-center gap-1">
+          <span>Меньше</span>
+          {[0, 25, 50, 75, 100].map((pct) => (
+            <div
+              key={pct}
+              className="h-[11px] w-[11px] rounded-[2px]"
+              style={{
+                background: pct === 0 ? 'var(--muted)' : `color-mix(in srgb, var(--primary) ${pct}%, var(--background))`,
+              }}
+            />
+          ))}
+          <span>Больше</span>
+        </div>
+      </div>
     </Card>
   )
 }
