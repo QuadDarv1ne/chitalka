@@ -50,6 +50,11 @@ export function TxtReader({ book, onProgress }: Props) {
   const updateHighlight = useReaderStore((s) => s.updateHighlight)
   const tts = useTTS()
 
+  // Two-page spread: only on wide screens. `page` is the index of the left
+  // page; the right page is page+1 (may not exist on the last odd page of
+  // the book). Navigation moves by 2.
+  const twoPage = settings.twoPage
+
   useReadingTracker(book.id, pagesFlipped)
 
   // Load text
@@ -85,32 +90,41 @@ export function TxtReader({ book, onProgress }: Props) {
     [pageStarts],
   )
 
-  // Restore the saved position once the book is paginated
+  // Restore the saved position once the book is paginated.
+  // In two-page mode the spread is aligned to an even left page, so the
+  // restored page stays visible (as the right page for odd indices).
+  const alignToSpread = (p: number) => (twoPage ? (p % 2 === 0 ? p : Math.max(0, p - 1)) : p)
   const positionRestoredRef = useRef(false)
   useEffect(() => {
     if (totalPages === 0 || positionRestoredRef.current) return
     if (book.textPosition) {
       positionRestoredRef.current = true
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPage(findPageForPositionCb(book.textPosition))
+      setPage(alignToSpread(findPageForPositionCb(book.textPosition)))
     }
-  }, [totalPages, book.textPosition, findPageForPositionCb])
+  }, [totalPages, book.textPosition, findPageForPositionCb, twoPage])
 
   // Clamp the restored page once the book is paginated (content may load
   // with a stale position that exceeds the page count)
   useEffect(() => {
     if (totalPages > 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPage((p) => Math.max(0, Math.min(p, totalPages - 1)))
+      setPage((p) => alignToSpread(Math.max(0, Math.min(p, totalPages - 1))))
     }
-  }, [totalPages])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalPages, twoPage])
 
   const currentPage = pages[page] || ''
-  const progress = totalPages > 0 ? (page + 1) / totalPages : 0
+  // In two-page mode the right page is the one after the left (spreadStart).
+  const rightPage = twoPage ? (pages[page + 1] || '') : ''
+  const pagesInSpread = twoPage ? (rightPage ? 2 : 1) : 1
+  const progress = totalPages > 0 ? Math.min(1, (page + pagesInSpread) / totalPages) : 0
 
-  // Highlights that belong to this page (by real word range)
+  // Highlights that belong to this spread (by real word range)
   const pageStartPos = pageStarts[page] ?? 0
-  const pageEndPos = pageStarts[page + 1] ?? Infinity
+  const pageEndPos = twoPage
+    ? (pageStarts[page + 2] ?? Infinity)
+    : (pageStarts[page + 1] ?? Infinity)
   const pageHighlights = useMemo(
     () =>
       highlights.filter(
@@ -130,19 +144,30 @@ export function TxtReader({ book, onProgress }: Props) {
   }, [page, totalPages, progress, onProgress, pageStartPos, pageEndPos])
 
   const prev = useCallback(() => {
-    if (page <= 0) return
-    setPage(page - 1)
+    const step = twoPage ? 2 : 1
+    if (page - step < 0) return
+    setPage(page - step)
     setPagesFlipped((n) => n + 1)
     containerRef.current?.scrollTo({ top: 0 })
     tts.stop()
-  }, [page, tts])
+  }, [page, tts, twoPage])
   const next = useCallback(() => {
-    if (totalPages === 0 || page >= totalPages - 1) return
-    setPage(page + 1)
+    const step = twoPage ? 2 : 1
+    if (totalPages === 0 || page + step > totalPages - 1) {
+      // On the last odd page, a single-page step still flips the final page
+      if (twoPage && page + 1 <= totalPages - 1) {
+        setPage(page + 1)
+        setPagesFlipped((n) => n + 1)
+        containerRef.current?.scrollTo({ top: 0 })
+        tts.stop()
+      }
+      return
+    }
+    setPage(page + step)
     setPagesFlipped((n) => n + 1)
     containerRef.current?.scrollTo({ top: 0 })
     tts.stop()
-  }, [page, totalPages, tts])
+  }, [page, totalPages, tts, twoPage])
 
   // Keyboard nav
   useEffect(() => {
@@ -348,6 +373,29 @@ export function TxtReader({ book, onProgress }: Props) {
     )
   }
 
+  // Render the body of a single page (markdown or paragraphs with highlights)
+  const renderPageBody = (pageText: string) => {
+    if (book.format === 'md') {
+      return (
+        <div className="prose prose-lg max-w-none dark:prose-invert" style={{ color: 'inherit' }}>
+          <ReactMarkdown
+            components={{
+              // Strip potentially dangerous attributes from HTML tags
+              a: ({ href, children, ...props }) => (
+                <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+                  {children}
+                </a>
+              ),
+            }}
+          >
+            {pageText}
+          </ReactMarkdown>
+        </div>
+      )
+    }
+    return pageText.split(/\n\n+/).map((para, i) => renderParagraph(para, i))
+  }
+
   return (
     <div
       ref={containerRef}
@@ -362,34 +410,28 @@ export function TxtReader({ book, onProgress }: Props) {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <article
+        <div
           ref={articleRef}
-          className="mx-auto px-6 py-10 max-w-[min(72rem,92vw)]"
-          style={{
-            ...readerStyle,
-            paddingLeft: marginX,
-            paddingRight: marginX,
-          }}
+          className={`mx-auto flex items-stretch py-10 ${
+            twoPage ? 'max-w-[min(120rem,98vw)] gap-0' : 'max-w-[min(85rem,95vw)]'
+          }`}
+          style={{ paddingLeft: marginX, paddingRight: marginX }}
         >
-          {book.format === 'md' ? (
-            <div className="prose prose-lg max-w-none dark:prose-invert" style={{ color: 'inherit' }}>
-              <ReactMarkdown
-                components={{
-                  // Strip potentially dangerous attributes from HTML tags
-                  a: ({ href, children, ...props }) => (
-                    <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
-                      {children}
-                    </a>
-                  ),
-                }}
-              >
-                {currentPage}
-              </ReactMarkdown>
-            </div>
-          ) : (
-            currentPage.split(/\n\n+/).map((para, i) => renderParagraph(para, i))
+          <article
+            className="flex-1 min-w-0 px-2 sm:px-4"
+            style={readerStyle}
+          >
+            {renderPageBody(currentPage)}
+          </article>
+          {twoPage && rightPage && (
+            <article
+              className="flex-1 min-w-0 px-2 sm:px-4 border-l"
+              style={{ ...readerStyle, borderColor: 'color-mix(in srgb, var(--reader-fg) 10%, transparent)' }}
+            >
+              {renderPageBody(rightPage)}
+            </article>
           )}
-        </article>
+        </div>
       )}
 
       {/* Floating action: TTS */}
@@ -479,7 +521,7 @@ export function TxtReader({ book, onProgress }: Props) {
         variant="ghost"
         size="icon"
         onClick={prev}
-        disabled={page === 0}
+        disabled={twoPage ? page < 2 : page === 0}
         className="fixed left-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-black/5 hover:bg-black/10 disabled:opacity-20"
         aria-label="Назад"
       >
@@ -489,7 +531,7 @@ export function TxtReader({ book, onProgress }: Props) {
         variant="ghost"
         size="icon"
         onClick={next}
-        disabled={page >= totalPages - 1}
+        disabled={twoPage ? page + pagesInSpread >= totalPages : page >= totalPages - 1}
         className="fixed right-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-black/5 hover:bg-black/10 disabled:opacity-20"
         aria-label="Вперёд"
       >
@@ -505,7 +547,9 @@ export function TxtReader({ book, onProgress }: Props) {
             color: 'var(--reader-fg)',
           }}
         >
-          {page + 1} / {totalPages}
+          {twoPage && rightPage
+            ? `${page + 1}–${page + 2} / ${totalPages}`
+            : `${page + 1} / ${totalPages}`}
         </div>
       )}
     </div>

@@ -18,9 +18,11 @@ interface Props {
 export function PdfReader({ book, onProgress }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const canvasRightRef = useRef<HTMLCanvasElement>(null)
   const docRef = useRef<import('pdfjs-dist').PDFDocumentProxy | null>(null)
   const loadingTaskRef = useRef<import('pdfjs-dist').PDFDocumentLoadingTask | null>(null)
   const renderTaskRef = useRef<import('pdfjs-dist').RenderTask | null>(null)
+  const renderTaskRightRef = useRef<import('pdfjs-dist').RenderTask | null>(null)
   const onProgressRef = useRef(onProgress)
   const [totalPages, setTotalPages] = useState(0)
   const [page, setPage] = useState(book.pdfPage ?? 1)
@@ -44,6 +46,9 @@ export function PdfReader({ book, onProgress }: Props) {
     prevPageRef.current = book.pdfPage ?? 1
   }
   const settings = useReaderStore((s) => s.settings)
+  const twoPage = settings.twoPage
+  // In two-page mode `page` is the left page; the right page is page+1.
+  const hasRightPage = twoPage && page + 1 <= totalPages
 
   onProgressRef.current = onProgress
 
@@ -97,15 +102,18 @@ export function PdfReader({ book, onProgress }: Props) {
     }
   }, [book.id, book.blob])
 
-  // Render current page
-  const renderPage = useCallback(
-    async (pageNum: number, renderScale: number) => {
+  // Render a single PDF page onto the given canvas
+  const renderPageOnto = useCallback(
+    async (
+      pageNum: number,
+      canvas: HTMLCanvasElement,
+      taskRef: { current: import('pdfjs-dist').RenderTask | null },
+      renderScale: number,
+    ) => {
       const doc = docRef.current
-      const canvas = canvasRef.current
       if (!doc || !canvas) return
       // Cancel any in-flight render to avoid concurrent draws on the same canvas
-      renderTaskRef.current?.cancel()
-      setPageLoading(true)
+      taskRef.current?.cancel()
       try {
         // Apply the theme background before the render starts, so there is
         // no white flash on dark/contrast themes
@@ -129,33 +137,48 @@ export function PdfReader({ book, onProgress }: Props) {
           viewport,
           canvas,
         })
-        renderTaskRef.current = renderTask
+        taskRef.current = renderTask
         await renderTask.promise
       } catch (e) {
         if ((e as { name?: string })?.name === 'RenderingCancelledException') return
         logger.error('PDF render failed', e)
-      } finally {
-        setPageLoading(false)
       }
     },
     [settings.theme],
   )
 
+  // Render current page(s)
   useEffect(() => {
-    if (!loading && docRef.current) {
-      renderPage(page, scale)
-      const progress = totalPages > 0 ? page / totalPages : 0
-      onProgressRef.current(progress, { pdfPage: page })
-      setPageInput(String(page))
+    if (loading || !docRef.current) return
+    setPageLoading(true)
+    const run = async () => {
+      await renderPageOnto(page, canvasRef.current!, renderTaskRef, scale)
+      if (twoPage && page + 1 <= totalPages) {
+        await renderPageOnto(page + 1, canvasRightRef.current!, renderTaskRightRef, scale)
+      }
+      setPageLoading(false)
     }
-  }, [page, scale, loading, totalPages, renderPage])
+    run()
+    const progress = totalPages > 0 ? page / totalPages : 0
+    onProgressRef.current(progress, { pdfPage: page })
+    setPageInput(String(page))
+  }, [page, scale, loading, totalPages, twoPage, renderPageOnto])
 
   const prev = useCallback(() => {
-    setPage((p) => Math.max(1, p - 1))
-  }, [])
+    const step = twoPage ? 2 : 1
+    setPage((p) => Math.max(1, p - step))
+  }, [twoPage])
   const next = useCallback(() => {
-    setPage((p) => Math.min(totalPages, p + 1))
-  }, [totalPages])
+    const step = twoPage ? 2 : 1
+    setPage((p) => {
+      const nextP = p + step
+      if (nextP > totalPages) {
+        // Last odd page: advance by 1 to show the final page alone
+        return Math.min(totalPages, p + 1)
+      }
+      return nextP
+    })
+  }, [totalPages, twoPage])
 
   const goToPage = useCallback(
     (n: number) => {

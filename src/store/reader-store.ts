@@ -27,6 +27,7 @@ export interface ReaderSettings {
   margin: number // 1..6
   textAlign: 'left' | 'justify'
   hyphens: boolean
+  twoPage: boolean // show two pages side-by-side (spread) on wide screens
   ttsRate: number // 0.5..2.0
   ttsVoice: string | null
   dailyGoalMinutes: number // 5..240
@@ -135,6 +136,7 @@ const defaultSettings: ReaderSettings = {
   margin: 3,
   textAlign: 'justify',
   hyphens: true,
+  twoPage: false,
   ttsRate: 1.0,
   ttsVoice: null,
   dailyGoalMinutes: 30,
@@ -174,6 +176,7 @@ function mergeSettings(partial: Partial<ReaderSettings> | null | undefined): Rea
     base.dailyGoalMinutes = clamp(raw.dailyGoalMinutes, 5, 240, defaultSettings.dailyGoalMinutes)
     // Booleans
     if (typeof raw.hyphens === 'boolean') base.hyphens = raw.hyphens
+    if (typeof raw.twoPage === 'boolean') base.twoPage = raw.twoPage
     // Strings
     if (typeof raw.ttsVoice === 'string' && raw.ttsVoice) base.ttsVoice = raw.ttsVoice.slice(0, 300)
   }
@@ -342,7 +345,7 @@ export const useReaderStore = create<ReaderState>()(
     }),
     {
       name: 'reader-store',
-      version: 3,
+      version: 4,
       partialize: (s) => ({
         settings: s.settings,
         bookmarks: s.bookmarks,
@@ -366,6 +369,12 @@ export const useReaderStore = create<ReaderState>()(
           if (!next?.notes) next.notes = []
           if (next?.settings && typeof next.settings.readingSpeed !== 'string') {
             next.settings.readingSpeed = 'normal' as ReadingSpeed
+          }
+        }
+        if (version < 4) {
+          // v3 → v4: add twoPage setting (defaults via mergeSettings below)
+          if (next?.settings && typeof next.settings.twoPage !== 'boolean') {
+            next.settings.twoPage = false
           }
         }
         return {

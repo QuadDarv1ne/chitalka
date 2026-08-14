@@ -15,6 +15,8 @@ import {
   AlignJustify,
   Volume2,
   Calendar,
+  BookOpen,
+  BookCopy,
 } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -208,6 +210,29 @@ export function ReaderSettingsPanel() {
           <ToggleGroupItem value="on">Включены</ToggleGroupItem>
           <ToggleGroupItem value="off">Выключены</ToggleGroupItem>
         </ToggleGroup>
+      </section>
+
+      {/* Page layout: single page vs two-page spread */}
+      <section className="space-y-3">
+        <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+          Раскладка страниц
+        </Label>
+        <ToggleGroup
+          type="single"
+          value={settings.twoPage ? 'two' : 'one'}
+          onValueChange={(v) => updateSettings({ twoPage: v === 'two' })}
+          className="grid grid-cols-2 gap-2"
+        >
+          <ToggleGroupItem value="one" className="gap-2">
+            <BookOpen className="h-4 w-4" /> Одна страница
+          </ToggleGroupItem>
+          <ToggleGroupItem value="two" className="gap-2">
+            <BookCopy className="h-4 w-4" /> Разворот (2 стр.)
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <p className="text-xs text-muted-foreground">
+          Разворот доступен на широких экранах (TXT, MD, HTML, PDF, EPUB)
+        </p>
       </section>
 
       <Separator />
