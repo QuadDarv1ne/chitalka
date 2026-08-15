@@ -129,6 +129,33 @@ function findCoverId(opfText: string): string | null {
     if (!id || !href) continue
     if (/cover/i.test(id) || /cover/i.test(href)) return id
   }
+  // 3) Common cover filenames (case-insensitive) — fallback for EPUBs
+  //    that don't declare a cover in meta but have a file named cover.jpg, cover.png, etc.
+  const coverFilenames = [
+    'cover.jpg', 'cover.jpeg', 'cover.png', 'cover.gif',
+    'Cover.jpg', 'Cover.jpeg', 'Cover.png', 'Cover.gif',
+    'Obrázok_1.jpg', 'обложка.jpg', 'oblozhka.jpg',
+    'cover_image.jpg', 'cover-image.jpg', 'book_cover.jpg',
+  ]
+  const manifestRegex = /<item\b[^>]*>/gi
+  let m2: RegExpExecArray | null
+  while ((m2 = manifestRegex.exec(opfText)) !== null) {
+    const item = m2[0]
+    if (!/media-type=["']image\//i.test(item)) continue
+    const href = item.match(/href=["']([^"']+)["']/i)?.[1]
+    if (href && coverFilenames.some((name) => href.toLowerCase().endsWith(name.toLowerCase()))) {
+      return item.match(/id=["']([^"']+)["']/i)?.[1] ?? null
+    }
+  }
+  // 4) First image item as last resort
+  const allItemsRegex = /<item\b[^>]*>/gi
+  let m3: RegExpExecArray | null
+  while ((m3 = allItemsRegex.exec(opfText)) !== null) {
+    const item = m3[0]
+    if (/media-type=["']image\//i.test(item)) {
+      return item.match(/id=["']([^"']+)["']/i)?.[1] ?? null
+    }
+  }
   return null
 }
 
@@ -192,21 +219,45 @@ export async function parseFb2Meta(file: File): Promise<ParsedBook> {
     }
     const getCover = async (): Promise<string | undefined> => {
       try {
-        // Find cover image reference
+        // 1) Standard FB2 coverpage
         const coverEl = doc.querySelector('coverpage > image')
-        if (!coverEl) return undefined
-        const href =
-          coverEl.getAttributeNS('http://www.w3.org/1999/xlink', 'href') ||
-          coverEl.getAttribute('href') ||
-          coverEl.getAttribute('l:href')
-        if (!href) return undefined
-        const id = href.replace(/^#/, '')
-        // Find binary with matching id
-        const binary = doc.querySelector(`binary[id="${id}"]`)
-        if (!binary) return undefined
-        const contentType = binary.getAttribute('content-type') || 'image/jpeg'
-        const data = binary.textContent?.replace(/\s/g, '') || ''
-        return `data:${contentType};base64,${data}`
+        if (coverEl) {
+          const href =
+            coverEl.getAttributeNS('http://www.w3.org/1999/xlink', 'href') ||
+            coverEl.getAttribute('href') ||
+            coverEl.getAttribute('l:href')
+          if (href) {
+            const id = href.replace(/^#/, '')
+            const binary = doc.querySelector(`binary[id="${id}"]`)
+            if (binary) {
+              const contentType = binary.getAttribute('content-type') || 'image/jpeg'
+              const data = binary.textContent?.replace(/\s/g, '') || ''
+              return `data:${contentType};base64,${data}`
+            }
+          }
+        }
+        // 2) Fallback: look for <body > image elements with href starting with #
+        //    Some FB2 files embed images in body that serve as covers
+        const body = doc.querySelector('body')
+        if (body) {
+          const images = body.querySelectorAll('image')
+          for (const img of images) {
+            const href =
+              img.getAttributeNS('http://www.w3.org/1999/xlink', 'href') ||
+              img.getAttribute('href') ||
+              img.getAttribute('l:href')
+            if (href && href.startsWith('#')) {
+              const id = href.replace(/^#/, '')
+              const binary = doc.querySelector(`binary[id="${id}"]`)
+              if (binary) {
+                const contentType = binary.getAttribute('content-type') || 'image/jpeg'
+                const data = binary.textContent?.replace(/\s/g, '') || ''
+                return `data:${contentType};base64,${data}`
+              }
+            }
+          }
+        }
+        return undefined
       } catch {
         return undefined
       }
@@ -344,13 +395,19 @@ export async function parsePdfMeta(file: File): Promise<ParsedBook> {
       let cover: string | undefined
       try {
         const page = await doc.getPage(1)
-        const viewport = page.getViewport({ scale: 0.5 })
+        // Use a higher scale for better quality cover image
+        const viewport = page.getViewport({ scale: 1.0 })
         const canvas = document.createElement('canvas')
-        canvas.width = viewport.width
-        canvas.height = viewport.height
+        // Scale down for thumbnail size but keep aspect ratio
+        const maxThumbWidth = 400
+        const scale = Math.min(1, maxThumbWidth / viewport.width)
+        const scaledViewport = page.getViewport({ scale })
+        canvas.width = scaledViewport.width
+        canvas.height = scaledViewport.height
         const ctx = canvas.getContext('2d')!
-        await page.render({ canvasContext: ctx, viewport, canvas } as any).promise
-        cover = canvas.toDataURL('image/jpeg', 0.7)
+        await page.render({ canvasContext: ctx, viewport: scaledViewport, canvas } as any).promise
+        // Use PNG for better quality covers (especially text-heavy PDFs)
+        cover = canvas.toDataURL('image/png', 0.92)
       } catch (e) {
         logger.warn('PDF cover render failed', e)
       }

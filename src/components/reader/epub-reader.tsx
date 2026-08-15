@@ -77,7 +77,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
     const rendition = epubBook.renderTo(viewerRef.current, {
       width: '100%',
       height: '100%',
-      spread: 'none',
+      spread: settings.twoPage ? 'auto' : 'none',
       flow: 'paginated',
       allowScriptedContent: false,
     })

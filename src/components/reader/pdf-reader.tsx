@@ -233,7 +233,7 @@ export function PdfReader({ book, onProgress }: Props) {
           variant="ghost"
           size="icon"
           onClick={prev}
-          disabled={page <= 1}
+          disabled={twoPage ? page <= 2 : page <= 1}
           className="h-8 w-8"
           aria-label="Назад"
         >
@@ -260,7 +260,7 @@ export function PdfReader({ book, onProgress }: Props) {
           variant="ghost"
           size="icon"
           onClick={next}
-          disabled={page >= totalPages}
+          disabled={twoPage ? page + 2 > totalPages : page >= totalPages}
           className="h-8 w-8"
           aria-label="Вперёд"
         >
@@ -290,22 +290,36 @@ export function PdfReader({ book, onProgress }: Props) {
         </Button>
       </div>
 
-      <div className="relative flex justify-center py-4">
+      <div className="relative flex justify-center py-4 gap-2">
         {pageLoading && (
           <div className="absolute inset-0 flex items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         )}
-        <canvas
-          ref={canvasRef}
-          className="shadow-lg rounded-sm"
-          style={{
-            background:
-              settings.theme === 'dark' || settings.theme === 'contrast'
-                ? '#2a2a2a'
-                : '#ffffff',
-          }}
-        />
+        <div className="flex gap-2 items-center justify-center">
+          <canvas
+            ref={canvasRef}
+            className="shadow-lg rounded-sm"
+            style={{
+              background:
+                settings.theme === 'dark' || settings.theme === 'contrast'
+                  ? '#2a2a2a'
+                  : '#ffffff',
+            }}
+          />
+          {twoPage && hasRightPage && (
+            <canvas
+              ref={canvasRightRef}
+              className="shadow-lg rounded-sm"
+              style={{
+                background:
+                  settings.theme === 'dark' || settings.theme === 'contrast'
+                    ? '#2a2a2a'
+                    : '#ffffff',
+              }}
+            />
+          )}
+        </div>
       </div>
     </div>
   )
