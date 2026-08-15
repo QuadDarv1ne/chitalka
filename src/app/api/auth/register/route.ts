@@ -85,7 +85,7 @@ export async function POST(req: Request) {
           passwordHash,
         },
       })
-    } catch (e) {
+    } catch (e: unknown) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         // Concurrent registration race — same email created between check and create
         return NextResponse.json(

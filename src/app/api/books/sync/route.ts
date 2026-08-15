@@ -80,7 +80,7 @@ export async function POST(req: Request) {
     const BATCH = 50
     for (let i = 0; i < tasks.length; i += BATCH) {
       const results = await Promise.all(tasks.slice(i, i + BATCH))
-      synced += results.reduce((sum, r) => sum + r, 0)
+      synced += results.reduce((sum: number, r: number) => sum + r, 0)
     }
 
     return NextResponse.json({ ok: true, synced })
@@ -113,7 +113,7 @@ export async function GET() {
     })
 
     return NextResponse.json({
-      books: books.map((b) => ({
+      books: books.map((b: { bookId: string; title: string; author: string | null; format: string; progress: number | null; lastOpenedAt: Date; updatedAt: Date }) => ({
         bookId: b.bookId,
         title: b.title,
         author: b.author,

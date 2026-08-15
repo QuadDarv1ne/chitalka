@@ -42,7 +42,7 @@ export async function GET() {
         createdAt: undefined, // don't expose internal timestamps
       },
       settings: settings || null,
-      books: bookMetas.map((b) => ({
+      books: bookMetas.map((b: { bookId: string; title: string; author: string | null; format: string; progress: number | null; lastOpenedAt: Date }) => ({
         bookId: b.bookId,
         title: b.title,
         author: b.author,
@@ -50,7 +50,7 @@ export async function GET() {
         progress: b.progress,
         lastOpenedAt: b.lastOpenedAt,
       })),
-      sessions: sessions.map((s) => ({
+      sessions: sessions.map((s: { createdAt: Date; expiresAt: Date; userAgent: string | null; ip: string | null }) => ({
         createdAt: s.createdAt,
         expiresAt: s.expiresAt,
         userAgent: s.userAgent,

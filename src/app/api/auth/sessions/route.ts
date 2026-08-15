@@ -17,7 +17,7 @@ export async function GET() {
     const currentSession = await getSessionPayload()
 
     return NextResponse.json({
-      sessions: sessions.map((s) => ({
+      sessions: sessions.map((s: { id: string; createdAt: Date; expiresAt: Date; userAgent: string | null; ip: string | null }) => ({
         id: s.id,
         createdAt: s.createdAt,
         expiresAt: s.expiresAt,
