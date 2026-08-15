@@ -97,7 +97,10 @@ export function HtmlReader({ book, onProgress }: Props) {
   }, [totalPages])
 
   const currentPage = pages[page] || ''
-  const progress = totalPages > 0 ? (page + 1) / totalPages : 0
+  const twoPage = settings.twoPage
+  const rightPage = twoPage ? (pages[page + 1] || '') : ''
+  const pagesInSpread = twoPage ? (rightPage ? 2 : 1) : 1
+  const progress = totalPages > 0 ? Math.min(1, (page + pagesInSpread) / totalPages) : 0
 
   // Highlights for current page (by real word range)
   const pageStartPos = pageStarts[page] ?? 0
@@ -121,18 +124,20 @@ export function HtmlReader({ book, onProgress }: Props) {
   }, [page, totalPages, progress, onProgress, pageStartPos])
 
   const prev = useCallback(() => {
-    if (page <= 0) return
-    setPage(page - 1)
+    const step = twoPage ? 2 : 1
+    if (page - step < 0) return
+    setPage(page - step)
     setPagesFlipped((n) => n + 1)
     containerRef.current?.scrollTo({ top: 0 })
-  }, [page])
+  }, [page, twoPage])
 
   const next = useCallback(() => {
-    if (totalPages === 0 || page >= totalPages - 1) return
-    setPage(page + 1)
+    const step = twoPage ? 2 : 1
+    if (totalPages === 0 || page + step >= totalPages) return
+    setPage(page + step)
     setPagesFlipped((n) => n + 1)
     containerRef.current?.scrollTo({ top: 0 })
-  }, [page, totalPages])
+  }, [page, totalPages, twoPage])
 
   // Keyboard nav
   useEffect(() => {
@@ -262,7 +267,9 @@ export function HtmlReader({ book, onProgress }: Props) {
         </div>
       ) : (
         <div
-          className="mx-auto max-w-[min(72rem,92vw)] px-6 py-10"
+          className={`mx-auto flex items-stretch py-10 ${
+            twoPage ? 'max-w-[min(140rem,99vw)] gap-0' : 'max-w-[min(100rem,97vw)]'
+          }`}
           style={{
             color: 'var(--reader-fg)',
             fontFamily: fontFamilyCss[settings.fontFamily],
@@ -273,22 +280,34 @@ export function HtmlReader({ book, onProgress }: Props) {
             paddingRight: `${settings.margin * 1.5}rem`,
           }}
         >
-          {/* Render HTML in an iframe for isolation.
-              sandbox="allow-scripts" + opaque origin: the book's own <script>
-              tags still render/interact, but cannot reach cookies, IndexedDB,
-              the parent window or same-origin /api/* endpoints. */}
+          {/* Left page */}
           <iframe
             ref={frameRef}
             title={book.title}
             sandbox="allow-scripts"
             srcDoc={buildPageHtml(currentPage, settings, pageHighlights)}
-            className="w-full"
+            className="flex-1 min-w-0"
             style={{
               minHeight: '60vh',
               border: 'none',
               background: 'transparent',
             }}
           />
+          {/* Right page (two-page spread) */}
+          {twoPage && rightPage && (
+            <iframe
+              title={`${book.title} — стр. ${page + 2}`}
+              sandbox="allow-scripts"
+              srcDoc={buildPageHtml(rightPage, settings, [])}
+              className="flex-1 min-w-0 border-l"
+              style={{
+                minHeight: '60vh',
+                border: 'none',
+                background: 'transparent',
+                borderColor: 'color-mix(in srgb, var(--reader-fg) 10%, transparent)',
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -366,7 +385,9 @@ export function HtmlReader({ book, onProgress }: Props) {
             color: 'var(--reader-fg)',
           }}
         >
-          {page + 1} / {totalPages}
+          {twoPage && rightPage
+            ? `${page + 1}–${page + 2} / ${totalPages}`
+            : `${page + 1} / ${totalPages}`}
         </div>
       )}
     </div>

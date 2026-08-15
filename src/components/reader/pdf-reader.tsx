@@ -24,12 +24,13 @@ export function PdfReader({ book, onProgress }: Props) {
   const renderTaskRef = useRef<import('pdfjs-dist').RenderTask | null>(null)
   const renderTaskRightRef = useRef<import('pdfjs-dist').RenderTask | null>(null)
   const onProgressRef = useRef(onProgress)
+  const settings = useReaderStore((s) => s.settings)
   const [totalPages, setTotalPages] = useState(0)
   const [page, setPage] = useState(book.pdfPage ?? 1)
   const [pagesFlipped, setPagesFlipped] = useState(0)
   const [loading, setLoading] = useState(true)
   const [pageLoading, setPageLoading] = useState(false)
-  const [scale, setScale] = useState(1.2)
+  const [scale, setScale] = useState(settings.twoPage ? 1.8 : 1.2)
   const [pageInput, setPageInput] = useState(String(page))
   const bookIdRef = useRef(book.id)
   const prevPageRef = useRef(book.pdfPage ?? 1)
@@ -39,13 +40,12 @@ export function PdfReader({ book, onProgress }: Props) {
     bookIdRef.current = book.id
     setPage(book.pdfPage ?? 1)
     setPageInput(String(book.pdfPage ?? 1))
-    setScale(1.2)
+    setScale(settings.twoPage ? 1.8 : 1.2)
     setTotalPages(0)
     setLoading(true)
     setPagesFlipped(0)
     prevPageRef.current = book.pdfPage ?? 1
   }
-  const settings = useReaderStore((s) => s.settings)
   const twoPage = settings.twoPage
   // In two-page mode `page` is the left page; the right page is page+1.
   const hasRightPage = twoPage && page + 1 <= totalPages
@@ -163,6 +163,11 @@ export function PdfReader({ book, onProgress }: Props) {
     onProgressRef.current(progress, { pdfPage: page })
     setPageInput(String(page))
   }, [page, scale, loading, totalPages, twoPage, renderPageOnto])
+
+  // Adapt scale when twoPage mode changes
+  useEffect(() => {
+    setScale(settings.twoPage ? 1.8 : 1.2)
+  }, [settings.twoPage])
 
   const prev = useCallback(() => {
     const step = twoPage ? 2 : 1
@@ -290,13 +295,13 @@ export function PdfReader({ book, onProgress }: Props) {
         </Button>
       </div>
 
-      <div className="relative flex justify-center py-4 gap-2">
+      <div className="relative flex justify-center py-4">
         {pageLoading && (
           <div className="absolute inset-0 flex items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         )}
-        <div className="flex gap-2 items-center justify-center">
+        <div className={`flex items-center justify-center ${twoPage ? 'gap-1' : ''}`}>
           <canvas
             ref={canvasRef}
             className="shadow-lg rounded-sm"

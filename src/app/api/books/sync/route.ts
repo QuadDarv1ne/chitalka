@@ -113,7 +113,7 @@ export async function GET() {
     })
 
     return NextResponse.json({
-      books: books.map((b: { bookId: string; title: string; author: string | null; format: string; progress: number | null; lastOpenedAt: Date; updatedAt: Date }) => ({
+      books: books.map((b) => ({
         bookId: b.bookId,
         title: b.title,
         author: b.author,

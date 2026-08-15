@@ -239,7 +239,10 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
   return (
     <div
       className="relative w-full"
-      style={{ background: 'var(--reader-bg)', height: 'calc(100vh - 6.5rem)' }}
+      style={{
+        background: 'var(--reader-bg)',
+        height: 'calc(100vh - 6.5rem)',
+      }}
     >
       {!ready && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -248,7 +251,14 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
           </p>
         </div>
       )}
-      <div ref={viewerRef} className="h-full w-full" />
+      <div
+        ref={viewerRef}
+        className="h-full"
+        style={{
+          width: settings.twoPage ? '100%' : 'min(100%, 720px)',
+          margin: settings.twoPage ? '0 auto' : '0 auto',
+        }}
+      />
 
       {/* Side nav buttons */}
       <Button

@@ -413,7 +413,7 @@ export function TxtReader({ book, onProgress }: Props) {
         <div
           ref={articleRef}
           className={`mx-auto flex items-stretch py-10 ${
-            twoPage ? 'max-w-[min(120rem,98vw)] gap-0' : 'max-w-[min(85rem,95vw)]'
+            twoPage ? 'max-w-[min(140rem,99vw)] gap-0' : 'max-w-[min(100rem,97vw)]'
           }`}
           style={{ paddingLeft: marginX, paddingRight: marginX }}
         >
