@@ -52,9 +52,6 @@ export async function POST(req: Request) {
       where: { email: normalizedEmail },
     })
 
-    // Equalize response time for existing/non-existing accounts
-    const dummyToken = generateResetToken()
-
     let resetLink: string | undefined
 
     if (user) {
@@ -63,7 +60,7 @@ export async function POST(req: Request) {
         where: { userId: user.id, usedAt: null },
       })
 
-const token = dummyToken
+const token = generateResetToken()
       const expiresAt = new Date(Date.now() + RESET_DURATION_MS)
       await db.passwordReset.create({
         data: {

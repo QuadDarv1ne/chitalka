@@ -22,6 +22,8 @@ const RESET = '\x1b[0m'
 // Production threshold: only info, warn, error
 const PROD_THRESHOLD = LEVEL_ORDER['info']
 
+import { format as formatUtil } from 'util'
+
 function _log(level: Level, ...args: unknown[]) {
   if (!isLevel(level)) return
   const threshold = process.env.NODE_ENV === 'production' ? PROD_THRESHOLD : 0
@@ -32,9 +34,16 @@ function _log(level: Level, ...args: unknown[]) {
     ? `${COLORS[level]}[${level.toUpperCase()}]${RESET} ${ts} `
     : `${level.toUpperCase()} ${ts} `
 
-  if (level === 'error') console.error(prefix, ...args)
-  else if (level === 'warn') console.warn(prefix, ...args)
-  else console.log(prefix, ...args)
+  const message = formatUtil(...args)
+  const output = prefix + message + '\n'
+
+  if (level === 'error') {
+    process.stderr.write(output)
+  } else if (level === 'warn') {
+    process.stderr.write(output)
+  } else {
+    process.stdout.write(output)
+  }
 }
 
 export const logger = {
