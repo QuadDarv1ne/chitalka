@@ -1,7 +1,7 @@
 'use client'
 
 import { logger } from '@/lib/logger'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -61,7 +61,6 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
   const [importing, setImporting] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [error, setError] = useState<string | null>(null)
-  const importCancelled = useRef(false)
 
   const filteredFiles = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -89,7 +88,6 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
 
   useEffect(() => {
     if (open) {
-      importCancelled.current = false
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSearch('')
       loadManifest()
@@ -124,7 +122,6 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
 
     setImporting(true)
     setError(null)
-    importCancelled.current = false
     let imported = 0
     setProgress({ done: 0, total: toImport.length })
 
@@ -145,7 +142,6 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
 
       // Process sequentially to avoid memory spikes from large files
       for (const file of toImport) {
-        if (importCancelled.current) break
         try {
           const res = await fetch(`/api/books/download/${encodeURIComponent(file.name)}`)
           if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -218,8 +214,6 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
     } finally {
       setImporting(false)
     }
-
-    if (importCancelled.current) return
   }
 
   const canImport = selected.size > 0 && !importing

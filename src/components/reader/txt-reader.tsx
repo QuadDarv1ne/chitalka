@@ -199,6 +199,7 @@ export function TxtReader({ book, onProgress }: Props) {
     const onGotoPosition = (e: Event) => {
       const pos = (e as CustomEvent<number>).detail
       if (typeof pos === 'number') {
+        tts.stop()
         setPage(findPageForPositionCb(pos))
         containerRef.current?.scrollTo({ top: 0 })
       }
@@ -208,6 +209,7 @@ export function TxtReader({ book, onProgress }: Props) {
       if (typeof label === 'string') {
         const idx = pages.findIndex((p) => p.includes(label))
         if (idx >= 0) {
+          tts.stop()
           setPage(idx)
           containerRef.current?.scrollTo({ top: 0 })
         }
@@ -280,11 +282,19 @@ export function TxtReader({ book, onProgress }: Props) {
 
   const handleHighlight = (color: HighlightColor) => {
     if (!selection) return
+    // Word-level position: the DOM text may wrap across paragraphs of the
+    // spread, so locate it in the raw spread text and count the words
+    // before it. Falls back to the page start when the raw text differs
+    // (e.g. markdown source vs rendered output).
+    const spreadText = rightPage ? `${currentPage}\n\n${rightPage}` : currentPage
+    const idx = spreadText.indexOf(selection.text)
+    const wordOffset =
+      idx >= 0 ? spreadText.slice(0, idx).split(/\s+/).filter(Boolean).length : 0
     addHighlight({
       bookId: book.id,
       text: selection.text,
       color,
-      textPosition: pageStartPos,
+      textPosition: pageStartPos + wordOffset,
     })
     toast.success('Выделение добавлено')
     setSelection(null)

@@ -4,10 +4,11 @@ import { logger } from '@/lib/logger'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import ePub, { type Book, type Rendition } from 'epubjs'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Volume2, Square, Pause, Play, Repeat } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
 import { useReaderStore, fontFamilyCss, themeBg, themeFg } from '@/store/reader-store'
 import { useReadingTracker } from '@/hooks/use-reading-tracker'
+import { useTTS } from '@/hooks/use-tts'
 
 interface Props {
   book: BookRecord
@@ -29,6 +30,23 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
   const [hasNext, setHasNext] = useState(false)
   const [relocations, setRelocations] = useState(0)
   const settings = useReaderStore((s) => s.settings)
+  const tts = useTTS()
+  // Stable handle to stop TTS from inside the init effect (which must not
+  // re-run when the TTS hook's state object changes).
+  const stopTtsRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    stopTtsRef.current = tts.stop
+  }, [tts.stop])
+  // "Listen mode": when TTS finishes a page, flip to the next one and keep
+  // reading. The advance is confirmed via the 'relocated' event (not a blind
+  // timeout), so the book end can never re-read the same page in a loop.
+  const [autoRead, setAutoRead] = useState(false)
+  const autoReadRef = useRef(false)
+  const ttsAdvancePendingRef = useRef(false)
+  const speakLatestRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    autoReadRef.current = autoRead
+  }, [autoRead])
 
   // Reading time tracking (page turns / relocations)
   useReadingTracker(book.id, relocations)
@@ -39,11 +57,13 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
 
   // Navigation helpers (declared before effects that use them)
   const prev = useCallback(() => {
+    tts.stop()
     renditionRef.current?.prev()
-  }, [])
+  }, [tts])
   const next = useCallback(() => {
+    tts.stop()
     renditionRef.current?.next()
-  }, [])
+  }, [tts])
   const updateNavButtons = useCallback(() => {
     const r = renditionRef.current
     if (!r) return
@@ -120,6 +140,11 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       onProgressRef.current(percent, { cfi })
       setRelocations((n) => n + 1)
       updateNavButtons()
+      // Resume TTS after an auto-advance once the new page is in place
+      if (ttsAdvancePendingRef.current) {
+        ttsAdvancePendingRef.current = false
+        window.setTimeout(() => speakLatestRef.current(), 350)
+      }
     }
     rendition.on('relocated', onLocated)
 
@@ -142,6 +167,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
     const onGoto = (e: Event) => {
       const href = (e as CustomEvent<string>).detail
       if (href && renditionRef.current) {
+        stopTtsRef.current()
         renditionRef.current.display(href).catch(() => {
           logger.warn('EPUB: failed to navigate to', href)
         })
@@ -150,6 +176,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
     const onGotoCfi = (e: Event) => {
       const cfi = (e as CustomEvent<string>).detail
       if (cfi && renditionRef.current) {
+        stopTtsRef.current()
         renditionRef.current.display(cfi).catch(() => {
           logger.warn('EPUB: failed to navigate to CFI', cfi)
         })
@@ -161,6 +188,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
         const spine = bookRef.current.spine
         const item = spine.get(idx)
         if (item && renditionRef.current) {
+          stopTtsRef.current()
           renditionRef.current.display(item.href).catch(() => {
             logger.warn('EPUB: failed to navigate to spine item', idx)
           })
@@ -239,6 +267,62 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
     }
   }, [settings.theme, settings.fontFamily, settings.fontSize, settings.lineHeight, settings.textAlign, settings.hyphens, ready])
 
+// TTS: extract the text of the current viewport via CFI range.
+  const getCurrentText = useCallback((): string => {
+    const book = bookRef.current
+    const rendition = renditionRef.current
+    if (!book || !rendition) return ''
+    try {
+      const loc = rendition.currentLocation()
+      const cfi = loc?.cfi
+      if (!cfi) return ''
+      const range = book.getRange(cfi)
+      // A page-start CFI ranges to the end of the section — cap it so a
+      // single read-aloud session doesn't queue a huge chapter.
+      const text = (range?.toString() ?? '').replace(/\s+/g, ' ').trim().slice(0, 10000)
+      return text
+    } catch (e) {
+      logger.warn('EPUB TTS: failed to read current location', e)
+      return ''
+    }
+  }, [])
+
+  const speakCurrentPage = useCallback(() => {
+    const text = getCurrentText()
+    if (!text) return
+    const voice = settings.ttsVoice
+      ? window.speechSynthesis
+          .getVoices()
+          .find((v) => v.voiceURI === settings.ttsVoice || v.name === settings.ttsVoice) ?? null
+      : null
+    tts.speak(text, {
+      rate: settings.ttsRate,
+      voice,
+      onFinished: () => {
+        if (!autoReadRef.current) return
+        const rendition = renditionRef.current
+        if (!rendition) return
+        try {
+          if (rendition.location?.atEnd) return // end of the book — stop
+        } catch { return }
+        ttsAdvancePendingRef.current = true
+        rendition.next()
+      },
+    })
+  }, [getCurrentText, settings.ttsRate, settings.ttsVoice, tts])
+
+  const handleTTS = () => {
+    if (tts.speaking) {
+      tts.stop()
+      return
+    }
+    speakCurrentPage()
+  }
+
+  useEffect(() => {
+    speakLatestRef.current = speakCurrentPage
+  }, [speakCurrentPage])
+
   return (
     <div
       className="relative w-full"
@@ -262,6 +346,54 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
           margin: settings.twoPage ? '0 auto' : '0 auto',
         }}
       />
+
+      {/* Floating action: TTS */}
+      {ready && (
+        <div className="fixed bottom-20 right-4 z-20 flex flex-col items-end gap-2">
+          {tts.speaking && (
+            <div className="flex items-center gap-1 rounded-full border bg-background px-2 py-1 shadow-md">
+              <span className="text-xs px-1">
+                {tts.currentChunk + 1} / {tts.totalChunks}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => (tts.paused ? tts.resume() : tts.pause())}
+              >
+                {tts.paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={tts.stop}
+              >
+                <Square className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+          <Button
+            variant={autoRead ? 'default' : 'outline'}
+            size="icon"
+            onClick={() => setAutoRead((v) => !v)}
+            className="rounded-full shadow-md h-10 w-10"
+            aria-label={autoRead ? 'Выключить автоперелистывание' : 'Включить автоперелистывание страниц при озвучке'}
+            title={autoRead ? 'Автоперелистывание: включено' : 'Автоперелистывание: выключено'}
+          >
+            <Repeat className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleTTS}
+            className="rounded-full shadow-md h-11 w-11"
+            aria-label={tts.speaking ? 'Остановить' : 'Читать вслух'}
+          >
+            {tts.speaking ? <Square className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+          </Button>
+        </div>
+      )}
 
       {/* Side nav buttons */}
       <Button

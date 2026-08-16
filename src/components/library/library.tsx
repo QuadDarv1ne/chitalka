@@ -89,7 +89,7 @@ import { UserMenu } from '@/components/auth/user-menu'
 import { CollectionImport } from './collection-import'
 import { UrlImportDialog } from './url-import'
 
-type SortKey = 'recent' | 'title' | 'added' | 'progress'
+type SortKey = 'recent' | 'title' | 'added' | 'progress' | 'rating'
 type FormatFilter = 'all' | 'epub' | 'pdf' | 'txt' | 'md' | 'fb2' | 'html' | 'mp3'
 type StatusFilter = 'all' | 'reading' | 'finished'
 
@@ -400,6 +400,7 @@ export function Library() {
       if (sort === 'title') return a.title.localeCompare(b.title, 'ru')
       if (sort === 'added') return b.addedAt - a.addedAt
       if (sort === 'progress') return (b.progress ?? 0) - (a.progress ?? 0)
+      if (sort === 'rating') return (b.rating ?? 0) - (a.rating ?? 0)
       return (b.lastOpenedAt ?? 0) - (a.lastOpenedAt ?? 0)
     }), [books, formatFilter, statusFilter, search, sort])
 
@@ -599,6 +600,9 @@ export function Library() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSort('progress')}>
                   По прогрессу чтения
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSort('rating')}>
+                  По оценке
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>Формат</DropdownMenuLabel>
