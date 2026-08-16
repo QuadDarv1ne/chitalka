@@ -13,18 +13,14 @@ export async function POST() {
       const payload = await verifySession(token)
       if (payload?.sessionId) {
         await revokeSession(payload.userId, payload.sessionId)
-      } else if (token) {
-        // Session without sessionId in payload — revoke the DB record too
-        // so the token can't be reused after logout.
-        try {
-          const session = await db.session.findFirst({
-            where: { userId: payload?.userId },
-          })
-          if (session) {
-            await db.session.delete({ where: { id: session.id } })
-          }
-        } catch {
-          // Non-critical — cookie is already deleted below
+      } else if (payload?.userId) {
+        // Token is valid but has no sessionId (legacy token) — revoke the
+        // DB session record so the token can't be reused after logout.
+        const session = await db.session.findFirst({
+          where: { userId: payload.userId },
+        })
+        if (session) {
+          await db.session.delete({ where: { id: session.id } })
         }
       }
     }
