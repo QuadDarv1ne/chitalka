@@ -111,7 +111,6 @@ export function TxtReader({ book, onProgress }: Props) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPage((p) => alignToSpread(Math.max(0, Math.min(p, totalPages - 1))))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalPages, twoPage])
 
   const currentPage = pages[page] || ''

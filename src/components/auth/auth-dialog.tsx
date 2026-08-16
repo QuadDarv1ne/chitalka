@@ -39,6 +39,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'login', onSucces
 
   // Keep mode in sync when the dialog is reopened with a different initialMode
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) setMode(initialMode)
   }, [open, initialMode])
 

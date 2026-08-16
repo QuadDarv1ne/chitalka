@@ -91,6 +91,7 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
   useEffect(() => {
     if (open) {
       importCancelled.current = false
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSearch('')
       loadManifest()
     }

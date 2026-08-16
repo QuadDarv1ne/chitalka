@@ -110,12 +110,14 @@ export function Reader() {
   // Push the final progress to the server when the reader closes or the tab
   // is hidden/closed — progress made while the library was unmounted is not lost.
   const bookIdRef = useRef<string | null>(null)
+  const bookFormatRef = useRef<BookRecord['format']>('txt')
   const bookMetaRef = useRef<{ format: BookRecord['format']; size: number }>({
     format: 'txt',
     size: 0,
   })
   useEffect(() => {
     bookIdRef.current = book?.id ?? null
+    bookFormatRef.current = book?.format ?? 'txt'
     if (book) bookMetaRef.current = { format: book.format, size: book.size }
   }, [book?.id, book])
   useEffect(() => {
@@ -199,7 +201,9 @@ export function Reader() {
       if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault()
-        setSearchOpen(true)
+        // Audio books have no full-text search — the toolbar button is
+        // hidden for mp3, so the shortcut must not open an empty dialog.
+        if (bookFormatRef.current !== 'mp3') setSearchOpen(true)
       } else if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
         e.preventDefault()
         // Dispatch a custom event so any reader can add a bookmark at current position

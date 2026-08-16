@@ -41,6 +41,8 @@ import {
   Check,
   Star,
   RotateCcw,
+  Dices,
+  Link2,
 } from 'lucide-react'
 import {
   getAllBooks,
@@ -84,6 +86,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { exportLibraryBackup, parseLibraryBackup, downloadBookFile } from '@/lib/export-utils'
 import { UserMenu } from '@/components/auth/user-menu'
 import { CollectionImport } from './collection-import'
+import { UrlImportDialog } from './url-import'
 
 type SortKey = 'recent' | 'title' | 'added' | 'progress'
 type FormatFilter = 'all' | 'epub' | 'pdf' | 'txt' | 'md' | 'fb2' | 'html' | 'mp3'
@@ -114,6 +117,7 @@ export function Library() {
   const [deleteTarget, setDeleteTarget] = useState<BookRecord | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [collectionOpen, setCollectionOpen] = useState(false)
+  const [urlImportOpen, setUrlImportOpen] = useState(false)
   const [detailsTarget, setDetailsTarget] = useState<BookRecord | null>(null)
   const dragDepth = useRef(0)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -149,6 +153,7 @@ export function Library() {
   }, [userId])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh()
   }, [refresh])
 
@@ -175,9 +180,8 @@ export function Library() {
     })()
   }, [user?.id, refresh, user])
 
-  const handleFiles = useCallback(
-    async (files: FileList) => {
-      const list = Array.from(files)
+  const importFiles = useCallback(
+    async (list: File[]) => {
       let imported = 0
       let skipped = 0
       let failed = 0
@@ -287,6 +291,23 @@ export function Library() {
     [refresh, userId],
   )
 
+  const handleFiles = useCallback(
+    (files: FileList | File[]) => {
+      void importFiles(Array.from(files))
+    },
+    [importFiles],
+  )
+
+  // Open a random book — prefers unread / in-progress books so the
+  // «Случайная книга» button is useful beyond the first week of use.
+  const openRandomBook = useCallback(() => {
+    if (books.length === 0) return
+    const unfinished = books.filter((b) => (b.progress ?? 0) < 0.99)
+    const pool = unfinished.length > 0 ? unfinished : books
+    const pick = pool[Math.floor(Math.random() * pool.length)]
+    if (pick) openBook(pick.id)
+  }, [books, openBook])
+
   const handleDelete = useCallback(
     async (id: string, title: string) => {
       setDeleting(true)
@@ -359,7 +380,7 @@ export function Library() {
         toast.error(e instanceof Error ? e.message : 'Ошибка восстановления')
       }
     },
-    [refresh, restoreData, user?.emailVerified],
+    [refresh, restoreData, user],
   )
 
   const filtered = useMemo(() => books
@@ -516,6 +537,27 @@ export function Library() {
               title="Статистика чтения"
             >
               <BarChart3 className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={openRandomBook}
+              disabled={books.length === 0}
+              aria-label="Случайная книга"
+              title="Случайная книга"
+            >
+              <Dices className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setUrlImportOpen(true)}
+              aria-label="Добавить по ссылке"
+              title="Добавить книгу по ссылке"
+            >
+              <Link2 className="h-4 w-4" />
             </Button>
 
             {/* Daily goal pill — shows today's progress vs goal, click → stats */}
@@ -730,7 +772,7 @@ export function Library() {
       <footer className="border-t mt-auto">
         <div className="container mx-auto px-4 md:px-8 py-4 text-xs text-muted-foreground">
           Все книги хранятся локально в вашем браузере. Поддерживаются EPUB, PDF, FB2, TXT, Markdown, HTML, MP3.
-          Перетащите файлы в окно для загрузки.
+          Перетащите файлы в окно для загрузки или добавьте книгу по прямой ссылке.
         </div>
       </footer>
 
@@ -770,6 +812,13 @@ export function Library() {
         onOpenChange={setCollectionOpen}
         userId={userId}
         onImported={refresh}
+      />
+
+      {/* Import from URL */}
+      <UrlImportDialog
+        open={urlImportOpen}
+        onOpenChange={setUrlImportOpen}
+        onImported={importFiles}
       />
 
       {/* Book details — re-derive from live state so rating/progress changes show instantly */}

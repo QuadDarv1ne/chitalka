@@ -18,8 +18,10 @@ export function useReadingTracker(bookId: string, pagesFlipped: number, active =
   const pagesRef = useRef<number>(0)
   const lastFlushRef = useRef<number>(Date.now())
   const bookIdRef = useRef(bookId)
+  // eslint-disable-next-line react-hooks/refs
   bookIdRef.current = bookId
   const activeRef = useRef(active)
+  // eslint-disable-next-line react-hooks/refs
   activeRef.current = active
 
   // Track page flips

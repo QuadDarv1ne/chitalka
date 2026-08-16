@@ -112,7 +112,12 @@ export function useTTS() {
         if (sessionRef.current !== sessionId || cancelledRef.current) return
         const next = i + 1
         if (next < chunks.length) {
-          window.speechSynthesis.speak(utterances[next])
+          // Chrome quirk: speak() called synchronously from an onend
+          // callback can be swallowed — defer to the next task.
+          setTimeout(() => {
+            if (sessionRef.current !== sessionId || cancelledRef.current) return
+            window.speechSynthesis.speak(utterances[next])
+          }, 0)
         } else {
           setState({
             speaking: false,

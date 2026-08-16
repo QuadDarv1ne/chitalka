@@ -66,12 +66,20 @@ export function AudioReader({ book, onProgress }: Props) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const trackRef = useRef(currentTrack)
   const currentTrackRef = useRef(currentTrack)
+  // eslint-disable-next-line react-hooks/refs
   currentTrackRef.current = currentTrack
   const onProgressRef = useRef(onProgress)
+  // eslint-disable-next-line react-hooks/refs
   onProgressRef.current = onProgress
   const playingRef = useRef(false)
   const autoAdvanceRef = useRef(false)
   const didRestoreRef = useRef(false)
+  // Throttle progress persistence: `timeupdate` fires ~4×/sec, and each
+  // progress call does an IndexedDB read+write — an unbounded queue would
+  // grow on slow devices. Save at most once per 3s (always immediately on
+  // a track change, and the position stays fresh within ~3s of pausing).
+  const lastProgressAtRef = useRef(0)
+  const lastTrackRef = useRef(book.audioTrack ?? 0)
   const settings = useReaderStore((s) => s.settings)
 
   // Track reading time only while audio is actually playing — a paused
@@ -83,6 +91,7 @@ export function AudioReader({ book, onProgress }: Props) {
     let cancelled = false
     const revoked: string[] = []
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     ;(async () => {
       try {
@@ -262,9 +271,15 @@ export function AudioReader({ book, onProgress }: Props) {
     toast.success(`Таймер сна: ${minutes} мин`)
   }, [])
 
-  // Sync progress
+  // Sync progress (throttled — see lastProgressAtRef)
   useEffect(() => {
     if (tracks.length === 0) return
+    const now = Date.now()
+    const trackChanged = lastTrackRef.current !== currentTrack
+    lastTrackRef.current = currentTrack
+    // Immediate save on track change; otherwise at most once per 3s
+    if (!trackChanged && now - lastProgressAtRef.current < 3000) return
+    lastProgressAtRef.current = now
     const totalProgress =
       (currentTrack + (duration > 0 ? currentTime / duration : 0)) / tracks.length
     onProgressRef.current(totalProgress, {

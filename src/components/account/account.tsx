@@ -63,6 +63,7 @@ export function Account() {
   const [revokingAll, setRevokingAll] = useState(false)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (user) setName(user.name ?? '')
   }, [user])
 
@@ -83,6 +84,7 @@ export function Account() {
   }, [user])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadSessions()
   }, [loadSessions])
 

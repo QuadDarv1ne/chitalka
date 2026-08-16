@@ -40,15 +40,16 @@ export function TocPanel({ book, onNavigate }: Props) {
   const [loading, setLoading] = useState(() => !tocCache.has(book.id))
 
   useEffect(() => {
-    const cached = tocCache.get(book.id)
-    if (cached) {
-      setToc(cached)
-      setLoading(false)
-      return
-    }
     let cancelled = false
-    setLoading(true)
     ;(async () => {
+      const cached = tocCache.get(book.id)
+      if (cached) {
+        setToc(cached)
+        setLoading(false)
+        return
+      }
+      if (cancelled) return
+      setLoading(true)
       if (book.format === 'epub') {
         let epubBook: any = null
         let blobUrl = ''

@@ -47,6 +47,7 @@ export function SearchDialog({ book }: Props) {
   // Monotonic counter: stale (out-of-order) search results are discarded
   const searchSeqRef = useRef(0)
   const openRef = useRef(open)
+  // eslint-disable-next-line react-hooks/refs
   openRef.current = open
 
   // Invalidate in-flight searches when the component unmounts (e.g. the
@@ -62,6 +63,7 @@ export function SearchDialog({ book }: Props) {
     if (!open) return
     let cancelled = false
     if (book.format === 'txt' || book.format === 'md' || book.format === 'fb2' || book.format === 'html') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTextLoaded(false)
       decodeTextBlob(book.blob)
         .then((text) => {
@@ -250,9 +252,8 @@ export function SearchDialog({ book }: Props) {
     [book.format, setOpen],
   )
 
-  // Reset on close
-  useEffect(() => {
-    if (!open) {
+  const handleOpenChange = (v: boolean) => {
+    if (!v) {
       searchSeqRef.current++
       setQuery('')
       setResults([])
@@ -260,7 +261,8 @@ export function SearchDialog({ book }: Props) {
       setTextContent('')
       setTextLoaded(false)
     }
-  }, [open])
+    setOpen(v)
+  }
 
   // Cmd/Ctrl+F to focus
   useEffect(() => {
@@ -277,7 +279,7 @@ export function SearchDialog({ book }: Props) {
   }, [open, setOpen])
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

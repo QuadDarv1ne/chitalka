@@ -36,6 +36,7 @@ export function PdfReader({ book, onProgress }: Props) {
   const prevPageRef = useRef(book.pdfPage ?? 1)
 
   // Sync state when book changes
+  /* eslint-disable react-hooks/refs */
   if (book.id !== bookIdRef.current) {
     bookIdRef.current = book.id
     setPage(book.pdfPage ?? 1)
@@ -46,10 +47,12 @@ export function PdfReader({ book, onProgress }: Props) {
     setPagesFlipped(0)
     prevPageRef.current = book.pdfPage ?? 1
   }
+  /* eslint-enable react-hooks/refs */
   const twoPage = settings.twoPage
   // In two-page mode `page` is the left page; the right page is page+1.
   const hasRightPage = twoPage && page + 1 <= totalPages
 
+  // eslint-disable-next-line react-hooks/refs
   onProgressRef.current = onProgress
 
   // Count only actual page turns, so the current page number is not logged
@@ -67,6 +70,7 @@ export function PdfReader({ book, onProgress }: Props) {
   // Load PDF document
   useEffect(() => {
     let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     ;(async () => {
       try {
@@ -166,6 +170,7 @@ export function PdfReader({ book, onProgress }: Props) {
 
   // Adapt scale when twoPage mode changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setScale(settings.twoPage ? 1.8 : 1.2)
   }, [settings.twoPage])
 
