@@ -11,6 +11,7 @@ import {
   Square,
   Pause,
   Play,
+  Repeat,
 } from 'lucide-react'
 import type { BookRecord } from '@/lib/library'
 import { decodeTextBlob } from '@/lib/text-encoding'
@@ -119,6 +120,12 @@ export function TxtReader({ book, onProgress }: Props) {
   const pagesInSpread = twoPage ? (rightPage ? 2 : 1) : 1
   const progress = totalPages > 0 ? Math.min(1, (page + pagesInSpread) / totalPages) : 0
 
+  // Live refs so TTS callbacks (which fire from browser events) always see
+  // the current page without stale closures.
+  const pageRef = useRef(page)
+  const totalPagesRef = useRef(totalPages)
+  const speakLatestRef = useRef<() => void>(() => {})
+
   // Highlights that belong to this spread (by real word range)
   const pageStartPos = pageStarts[page] ?? 0
   const pageEndPos = twoPage
@@ -173,8 +180,15 @@ export function TxtReader({ book, onProgress }: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
-      if (e.key === 'ArrowLeft') prev()
-      else if (e.key === 'ArrowRight') next()
+      // Space on a focused button/link must trigger the element, not the
+      // page turn (otherwise the floating nav buttons would double-flip)
+      if ((e.key === ' ' || e.key === 'PageDown' || e.key === 'PageUp') &&
+        e.target instanceof Element && e.target.closest('button, a')) return
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') prev()
+      else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        if (e.key === ' ' || e.key === 'PageDown') e.preventDefault()
+        next()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -291,11 +305,15 @@ export function TxtReader({ book, onProgress }: Props) {
     setEditingNote('')
   }
 
-  const handleTTS = () => {
-    if (tts.speaking) {
-      tts.stop()
-      return
-    }
+  // "Listen mode": when the TTS finishes the last chunk of a page, flip to
+  // the next page and keep reading (until the book ends or the user stops).
+  const [autoRead, setAutoRead] = useState(false)
+  const autoReadRef = useRef(false)
+  useEffect(() => {
+    autoReadRef.current = autoRead
+  }, [autoRead])
+
+  const speakCurrentPage = useCallback(() => {
     const text = currentPage.replace(/[#*_`>-]/g, '').replace(/\n+/g, ' ')
     // The settings panel stores the voice by `voiceURI`; match it first and
     // fall back to `name` for values saved by older versions.
@@ -304,8 +322,39 @@ export function TxtReader({ book, onProgress }: Props) {
           .getVoices()
           .find((v) => v.voiceURI === settings.ttsVoice || v.name === settings.ttsVoice) ?? null
       : null
-    tts.speak(text, { rate: settings.ttsRate, voice })
+    tts.speak(text, {
+      rate: settings.ttsRate,
+      voice,
+      onFinished: () => {
+        if (!autoReadRef.current) return
+        const total = totalPagesRef.current
+        const cur = pageRef.current
+        const step = twoPage ? 2 : 1
+        let nxt = cur + step
+        if (nxt > total - 1) nxt = twoPage && cur + 1 <= total - 1 ? cur + 1 : cur
+        if (nxt === cur) return // end of the book — stop
+        setPage(nxt)
+        setPagesFlipped((n) => n + 1)
+        containerRef.current?.scrollTo({ top: 0 })
+        // Give the new page a moment to render before speaking it
+        window.setTimeout(() => speakLatestRef.current(), 450)
+      },
+    })
+  }, [currentPage, settings.ttsRate, settings.ttsVoice, tts, twoPage])
+
+  const handleTTS = () => {
+    if (tts.speaking) {
+      tts.stop()
+      return
+    }
+    speakCurrentPage()
   }
+
+  useEffect(() => {
+    pageRef.current = page
+    totalPagesRef.current = totalPages
+    speakLatestRef.current = speakCurrentPage
+  }, [page, totalPages, speakCurrentPage])
 
   // Highlight the paragraph currently being spoken. Maps the TTS chunk's
   // char offset (within the normalized spoken text) back to the paragraph,
@@ -459,6 +508,16 @@ export function TxtReader({ book, onProgress }: Props) {
               </Button>
             </div>
           )}
+          <Button
+            variant={autoRead ? 'default' : 'outline'}
+            size="icon"
+            onClick={() => setAutoRead((v) => !v)}
+            className="rounded-full shadow-md h-10 w-10"
+            aria-label={autoRead ? 'Выключить автоперелистывание' : 'Включить автоперелистывание страниц при озвучке'}
+            title={autoRead ? 'Автоперелистывание: включено' : 'Автоперелистывание: выключено'}
+          >
+            <Repeat className="h-4 w-4" />
+          </Button>
           <Button
             variant="outline"
             size="icon"

@@ -39,6 +39,7 @@ const SPEED_LABELS: Record<string, string> = {
 
 export function Stats() {
   const setView = useReaderStore((s) => s.setView)
+  const openBook = useReaderStore((s) => s.openBook)
   const sessions = useReaderStore((s) => s.sessions)
   const highlights = useReaderStore((s) => s.highlights)
   const bookmarks = useReaderStore((s) => s.bookmarks)
@@ -284,7 +285,16 @@ export function Stats() {
               {bookStats.map((s) => (
                 <li
                   key={s.book.id}
-                  className="flex items-center gap-4 py-2 border-b last:border-b-0"
+                  className="flex items-center gap-4 py-2 border-b last:border-b-0 cursor-pointer group"
+                  onClick={() => openBook(s.book.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      openBook(s.book.id)
+                    }
+                  }}
                 >
                   <div className="h-12 w-9 bg-muted rounded overflow-hidden flex-shrink-0">
                     {s.book.cover && (
@@ -314,6 +324,7 @@ export function Stats() {
                       </p>
                       <p className="text-xs text-muted-foreground">прогресс</p>
                     </div>
+                    <BookOpen className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                   </div>
                 </li>
               ))}

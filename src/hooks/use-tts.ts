@@ -32,6 +32,7 @@ export function useTTS() {
   // callbacks asynchronously, and a boolean flag reset right after cancel()
   // can let the previous session's callbacks resume old chunks.
   const sessionRef = useRef(0)
+  const onFinishedRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     return () => {
@@ -70,7 +71,7 @@ export function useTTS() {
     return chunks
   }
 
-  const speak = useCallback((text: string, opts?: { rate?: number; voice?: SpeechSynthesisVoice | null }) => {
+  const speak = useCallback((text: string, opts?: { rate?: number; voice?: SpeechSynthesisVoice | null; onFinished?: () => void }) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return
     // Invalidate the previous session BEFORE cancel() so its pending
     // callbacks (delivered asynchronously by the browser) are discarded.
@@ -79,6 +80,7 @@ export function useTTS() {
     cancelledRef.current = false
     rateRef.current = opts?.rate ?? 1.0
     voiceRef.current = opts?.voice ?? null
+    onFinishedRef.current = opts?.onFinished ?? null
 
     const chunks = splitIntoChunks(text)
     const starts = chunks.map((c) => c.start)
@@ -126,6 +128,7 @@ export function useTTS() {
             totalChunks: 0,
             currentChunkStart: 0,
           })
+          onFinishedRef.current?.()
         }
       }
       u.onerror = () => {
@@ -162,6 +165,7 @@ export function useTTS() {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       cancelledRef.current = true
       sessionRef.current++
+      onFinishedRef.current = null
       window.speechSynthesis.cancel()
       setState({
         speaking: false,

@@ -15,6 +15,8 @@ interface Props {
 const shortcuts: { key: string; description: string }[] = [
   { key: '←', description: 'Предыдущая страница' },
   { key: '→', description: 'Следующая страница' },
+  { key: 'Пробел / PgDn', description: 'Следующая страница' },
+  { key: 'PgUp / Backspace', description: 'Предыдущая страница' },
   { key: 'Ctrl/⌘ + F', description: 'Поиск по книге' },
   { key: 'Ctrl/⌘ + B', description: 'Добавить закладку' },
   { key: 'Ctrl/⌘ + =', description: 'Увеличить шрифт' },

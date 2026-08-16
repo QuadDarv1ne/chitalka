@@ -29,6 +29,8 @@ export function HtmlReader({ book, onProgress }: Props) {
   const [pagesFlipped, setPagesFlipped] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLIFrameElement>(null)
+  const frameRightRef = useRef<HTMLIFrameElement>(null)
+  const selectionSourceRef = useRef<'left' | 'right'>('left')
   const [selection, setSelection] = useState<{ x: number; y: number; text: string } | null>(null)
   const [editingHighlightId, setEditingHighlightId] = useState<string | null>(null)
   const [editingNote, setEditingNote] = useState('')
@@ -117,6 +119,21 @@ export function HtmlReader({ book, onProgress }: Props) {
     [highlights, book.id, pageStartPos, pageEndPos],
   )
 
+  // Highlights that belong to the right page of a two-page spread
+  const rightPageStartPos = twoPage ? (pageStarts[page + 1] ?? 0) : 0
+  const rightPageEndPos = twoPage ? (pageStarts[page + 2] ?? Infinity) : Infinity
+  const rightPageHighlights = useMemo(
+    () =>
+      highlights.filter(
+        (h) =>
+          h.bookId === book.id &&
+          h.textPosition !== undefined &&
+          h.textPosition >= rightPageStartPos &&
+          h.textPosition < rightPageEndPos,
+      ),
+    [highlights, book.id, rightPageStartPos, rightPageEndPos],
+  )
+
   useEffect(() => {
     if (totalPages > 0) {
       onProgress(progress, { textPosition: pageStartPos })
@@ -144,8 +161,13 @@ export function HtmlReader({ book, onProgress }: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
-      if (e.key === 'ArrowLeft') prev()
-      else if (e.key === 'ArrowRight') next()
+      if ((e.key === ' ' || e.key === 'PageDown' || e.key === 'PageUp') &&
+        e.target instanceof Element && e.target.closest('button, a')) return
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') prev()
+      else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        if (e.key === ' ' || e.key === 'PageDown') e.preventDefault()
+        next()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -207,11 +229,15 @@ export function HtmlReader({ book, onProgress }: Props) {
   // Messages from the reader iframe: text selection and highlight clicks
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      if (e.source !== frameRef.current?.contentWindow) return
+      if (e.source !== frameRef.current?.contentWindow &&
+          e.source !== frameRightRef.current?.contentWindow) return
       const data = e.data
       if (!data || data.__chitalka !== true) return
       if (data.type === 'select') {
-        const rect = frameRef.current?.getBoundingClientRect()
+        const fromRight = e.source === frameRightRef.current?.contentWindow
+        selectionSourceRef.current = fromRight ? 'right' : 'left'
+        const frame = fromRight ? frameRightRef.current : frameRef.current
+        const rect = frame?.getBoundingClientRect()
         setSelection({
           x: (rect?.left ?? 0) + data.x,
           y: (rect?.top ?? 0) + data.y,
@@ -232,11 +258,15 @@ export function HtmlReader({ book, onProgress }: Props) {
   // Highlight from iframe selection
   const handleHighlight = (color: HighlightColor) => {
     if (!selection) return
+    const pos =
+      selectionSourceRef.current === 'right' && twoPage
+        ? (pageStarts[page + 1] ?? pageStartPos)
+        : pageStartPos
     addHighlight({
       bookId: book.id,
       text: selection.text,
       color,
-      textPosition: pageStartPos,
+      textPosition: pos,
     })
     toast.success('Выделение добавлено')
     setSelection(null)
@@ -296,9 +326,10 @@ export function HtmlReader({ book, onProgress }: Props) {
           {/* Right page (two-page spread) */}
           {twoPage && rightPage && (
             <iframe
+              ref={frameRightRef}
               title={`${book.title} — стр. ${page + 2}`}
               sandbox="allow-scripts"
-              srcDoc={buildPageHtml(rightPage, settings, [])}
+              srcDoc={buildPageHtml(rightPage, settings, rightPageHighlights)}
               className="flex-1 min-w-0 border-l"
               style={{
                 minHeight: '60vh',

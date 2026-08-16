@@ -34,11 +34,15 @@ export function PdfReader({ book, onProgress }: Props) {
   const [pageInput, setPageInput] = useState(String(page))
   const bookIdRef = useRef(book.id)
   const prevPageRef = useRef(book.pdfPage ?? 1)
+  // Once the user adjusts zoom, toggling two-page mode keeps their scale
+  // instead of snapping back to the default.
+  const userScaleRef = useRef(false)
 
   // Sync state when book changes
   /* eslint-disable react-hooks/refs */
   if (book.id !== bookIdRef.current) {
     bookIdRef.current = book.id
+    userScaleRef.current = false
     setPage(book.pdfPage ?? 1)
     setPageInput(String(book.pdfPage ?? 1))
     setScale(settings.twoPage ? 1.8 : 1.2)
@@ -168,9 +172,9 @@ export function PdfReader({ book, onProgress }: Props) {
     setPageInput(String(page))
   }, [page, scale, loading, totalPages, twoPage, renderPageOnto])
 
-  // Adapt scale when twoPage mode changes
+  // Adapt scale when twoPage mode changes (unless the user zoomed manually)
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (userScaleRef.current) return
     setScale(settings.twoPage ? 1.8 : 1.2)
   }, [settings.twoPage])
 
@@ -204,10 +208,21 @@ export function PdfReader({ book, onProgress }: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
-      if (e.key === 'ArrowLeft') prev()
-      else if (e.key === 'ArrowRight') next()
-      else if (e.key === '+' || e.key === '=') setScale((s) => Math.min(3, s + 0.2))
-      else if (e.key === '-') setScale((s) => Math.max(0.5, s - 0.2))
+      if ((e.key === ' ' || e.key === 'PageDown' || e.key === 'PageUp') &&
+        e.target instanceof Element && e.target.closest('button, a')) return
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') prev()
+      else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        if (e.key === ' ' || e.key === 'PageDown') e.preventDefault()
+        next()
+      }
+      else if (e.key === '+' || e.key === '=') {
+        userScaleRef.current = true
+        setScale((s) => Math.min(3, s + 0.2))
+      }
+      else if (e.key === '-') {
+        userScaleRef.current = true
+        setScale((s) => Math.max(0.5, s - 0.2))
+      }
     }
     const onGotoPage = (e: Event) => {
       const p = (e as CustomEvent<number>).detail
@@ -280,7 +295,10 @@ export function PdfReader({ book, onProgress }: Props) {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setScale((s) => Math.max(0.5, s - 0.2))}
+          onClick={() => {
+            userScaleRef.current = true
+            setScale((s) => Math.max(0.5, s - 0.2))
+          }}
           className="h-8 w-8"
           aria-label="Уменьшить"
         >
@@ -292,7 +310,10 @@ export function PdfReader({ book, onProgress }: Props) {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setScale((s) => Math.min(3, s + 0.2))}
+          onClick={() => {
+            userScaleRef.current = true
+            setScale((s) => Math.min(3, s + 0.2))
+          }}
           className="h-8 w-8"
           aria-label="Увеличить"
         >

@@ -127,9 +127,12 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
-      if (e.key === 'ArrowLeft') {
+      if ((e.key === ' ' || e.key === 'PageDown' || e.key === 'PageUp') &&
+        e.target instanceof Element && e.target.closest('button, a')) return
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') {
         prev()
-      } else if (e.key === 'ArrowRight') {
+      } else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        if (e.key === ' ' || e.key === 'PageDown') e.preventDefault()
         next()
       }
     }

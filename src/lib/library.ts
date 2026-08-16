@@ -87,6 +87,34 @@ export async function saveBook(book: BookRecord) {
   await db.put('books', book)
 }
 
+/**
+ * Hash the head of a Blob (first 64 KiB) for duplicate detection.
+ * crypto.subtle is only available in secure contexts (HTTPS or localhost);
+ * fall back to a fast non-crypto hash (FNV-1a 64-bit) on plain HTTP / LAN
+ * deployments so dedup still works — it's a fingerprint, not a security
+ * boundary.
+ */
+export async function hashFileHead(source: Blob): Promise<string> {
+  const head = await source.slice(0, 64 * 1024).arrayBuffer()
+  if (typeof crypto !== 'undefined' && crypto.subtle?.digest) {
+    const digest = await crypto.subtle.digest('SHA-256', head)
+    const bytes = new Uint8Array(digest)
+    let hex = ''
+    for (const b of bytes) hex += b.toString(16).padStart(2, '0')
+    return hex
+  }
+  const bytes = new Uint8Array(head)
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193
+  for (let i = 0; i < bytes.length; i++) {
+    h1 ^= bytes[i]
+    h1 = Math.imul(h1, 0x01000193)
+    h2 ^= bytes[i] + 1
+    h2 = Math.imul(h2, 0x85ebca6b)
+  }
+  return `${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`
+}
+
 export async function getBook(id: string) {
   const db = await getDB()
   return db.get('books', id)

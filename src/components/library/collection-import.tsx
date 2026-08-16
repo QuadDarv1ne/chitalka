@@ -13,8 +13,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Loader2, Download, RefreshCw, FolderOpen, Search } from 'lucide-react'
-import { saveBook, getAllBooks, type BookRecord } from '@/lib/library'
-import { hashFileHead } from './library'
+import { saveBook, getAllBooks, hashFileHead, type BookRecord } from '@/lib/library'
 import {
   detectFormat,
   parseEpubMeta,
