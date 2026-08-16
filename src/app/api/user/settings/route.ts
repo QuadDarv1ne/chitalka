@@ -28,7 +28,7 @@ export async function GET() {
       return NextResponse.json({ settings: null, exists: false })
     }
 
-return NextResponse.json({
+    return NextResponse.json({
       exists: true,
       settings: {
         theme: settings.theme,
