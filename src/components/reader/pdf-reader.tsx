@@ -32,6 +32,7 @@ export function PdfReader({ book, onProgress }: Props) {
   const [pageLoading, setPageLoading] = useState(false)
   const [scale, setScale] = useState(settings.twoPage ? 1.8 : 1.2)
   const [pageInput, setPageInput] = useState(String(page))
+  const pageInputRef = useRef<HTMLInputElement>(null)
   const bookIdRef = useRef(book.id)
   const prevPageRef = useRef(book.pdfPage ?? 1)
   // Once the user adjusts zoom, toggling two-page mode keeps their scale
@@ -54,6 +55,11 @@ export function PdfReader({ book, onProgress }: Props) {
   /* eslint-enable react-hooks/refs */
   const twoPage = settings.twoPage
   // In two-page mode `page` is the left page; the right page is page+1.
+  // A spread always starts on an odd page (1-based) so navigation cannot
+  // strand the reader on an unreachable page 1 (the old Math.max(1, p-2)
+  // trapped an odd left page between page 0 and the disabled prev button).
+  const alignToSpread = (p: number) =>
+    twoPage ? (p % 2 === 1 ? p : Math.max(1, p - 1)) : p
   const hasRightPage = twoPage && page + 1 <= totalPages
 
   // eslint-disable-next-line react-hooks/refs
@@ -88,7 +94,7 @@ export function PdfReader({ book, onProgress }: Props) {
         docRef.current = doc
         setTotalPages(doc.numPages)
         // Clamp the restored page — the saved page may exceed the page count
-        setPage((p) => Math.max(1, Math.min(p, doc.numPages)))
+        setPage((p) => alignToSpread(Math.max(1, Math.min(p, doc.numPages))))
         setPageInput((v) => String(Math.max(1, Math.min(Number(v) || 1, doc.numPages))))
         setLoading(false)
       } catch (e) {
@@ -156,20 +162,30 @@ export function PdfReader({ book, onProgress }: Props) {
   )
 
   // Render current page(s)
+  const renderRunRef = useRef(0)
   useEffect(() => {
     if (loading || !docRef.current) return
+    // Guard against stale runs: a rapid page/scale change starts a second
+    // render while the first is in flight. Each run gets a monotonic id and
+    // only the newest one may touch the loading state / progress.
+    const runId = ++renderRunRef.current
     setPageLoading(true)
     const run = async () => {
       await renderPageOnto(page, canvasRef.current!, renderTaskRef, scale)
       if (twoPage && page + 1 <= totalPages) {
         await renderPageOnto(page + 1, canvasRightRef.current!, renderTaskRightRef, scale)
       }
+      if (renderRunRef.current !== runId) return
       setPageLoading(false)
     }
     run()
+    if (renderRunRef.current !== runId) return
     const progress = totalPages > 0 ? page / totalPages : 0
     onProgressRef.current(progress, { pdfPage: page })
-    setPageInput(String(page))
+    // Only sync the page input while the user is not typing in it — an
+    // eager overwrite interrupts multi-digit entry on every render.
+    const input = pageInputRef.current
+    if (input && document.activeElement !== input) setPageInput(String(page))
   }, [page, scale, loading, totalPages, twoPage, renderPageOnto])
 
   // Adapt scale when twoPage mode changes (unless the user zoomed manually)
@@ -180,15 +196,18 @@ export function PdfReader({ book, onProgress }: Props) {
 
   const prev = useCallback(() => {
     const step = twoPage ? 2 : 1
-    setPage((p) => Math.max(1, p - step))
+    setPage((p) => Math.max(1, alignToSpread(p) - step))
   }, [twoPage])
   const next = useCallback(() => {
     const step = twoPage ? 2 : 1
     setPage((p) => {
-      const nextP = p + step
+      const aligned = alignToSpread(p)
+      const nextP = aligned + step
       if (nextP > totalPages) {
         // Last odd page: advance by 1 to show the final page alone
-        return Math.min(totalPages, p + 1)
+        if (totalPages % 2 === 1) return Math.min(totalPages, aligned + 1)
+        // Even total — the current spread already shows the last page
+        return aligned
       }
       return nextP
     })
@@ -197,10 +216,10 @@ export function PdfReader({ book, onProgress }: Props) {
   const goToPage = useCallback(
     (n: number) => {
       if (n >= 1 && n <= totalPages) {
-        setPage(n)
+        setPage(alignToSpread(n))
       }
     },
-    [totalPages],
+    [totalPages, twoPage],
   )
 
   // Keyboard nav
@@ -210,16 +229,20 @@ export function PdfReader({ book, onProgress }: Props) {
       if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
       if ((e.key === ' ' || e.key === 'PageDown' || e.key === 'PageUp') &&
         e.target instanceof Element && e.target.closest('button, a')) return
-      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') prev()
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') {
+        if (e.key === 'Backspace') e.preventDefault()
+        prev()
+      }
       else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
         if (e.key === ' ' || e.key === 'PageDown') e.preventDefault()
         next()
       }
-      else if (e.key === '+' || e.key === '=') {
+      // Ctrl/Meta+'+'/'-' is the browser zoom — only hijack the plain keys
+      else if ((e.key === '+' || e.key === '=') && !e.ctrlKey && !e.metaKey) {
         userScaleRef.current = true
         setScale((s) => Math.min(3, s + 0.2))
       }
-      else if (e.key === '-') {
+      else if (e.key === '-' && !e.ctrlKey && !e.metaKey) {
         userScaleRef.current = true
         setScale((s) => Math.max(0.5, s - 0.2))
       }
@@ -258,7 +281,7 @@ export function PdfReader({ book, onProgress }: Props) {
           variant="ghost"
           size="icon"
           onClick={prev}
-          disabled={twoPage ? page <= 2 : page <= 1}
+          disabled={page <= 1}
           className="h-8 w-8"
           aria-label="Назад"
         >
@@ -272,6 +295,7 @@ export function PdfReader({ book, onProgress }: Props) {
           className="flex items-center gap-1"
         >
           <Input
+            ref={pageInputRef}
             value={pageInput}
             onChange={(e) => setPageInput(e.target.value)}
             className="h-8 w-12 text-center text-sm"
@@ -285,7 +309,7 @@ export function PdfReader({ book, onProgress }: Props) {
           variant="ghost"
           size="icon"
           onClick={next}
-          disabled={twoPage ? page + 2 > totalPages : page >= totalPages}
+          disabled={twoPage ? page + 2 > totalPages && page + 1 >= totalPages : page >= totalPages}
           className="h-8 w-8"
           aria-label="Вперёд"
         >

@@ -26,6 +26,9 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
   const renderedRef = useRef(false)
   const onProgressRef = useRef(onProgress)
   const [ready, setReady] = useState(false)
+  // Tracks the pending TTS auto-advance timeout so unmount can cancel it —
+  // otherwise the timer reads a page of an unmounted reader aloud.
+  const ttsAdvanceTimerRef = useRef<number | null>(null)
   const [hasPrev, setHasPrev] = useState(false)
   const [hasNext, setHasNext] = useState(false)
   const [relocations, setRelocations] = useState(0)
@@ -126,6 +129,9 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
         updateNavButtons()
       } catch (e) {
         logger.error('EPUB render failed', e)
+        if (!disposed) {
+          setReady(false)
+        }
       }
     }
     go()
@@ -135,7 +141,9 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       if (disposed) return
       if (!location || !location.start) return
       const cfi = location.start.cfi
-      const percent = location.start.percentage || 0
+      // Clamp the percentage — epubjs spine-relative values can exceed 1
+      // (multi-spine books), which would persist as progress > 100%.
+      const percent = Math.max(0, Math.min(1, location.start.percentage || 0))
       // Persist CFI on book record
       onProgressRef.current(percent, { cfi })
       setRelocations((n) => n + 1)
@@ -143,7 +151,8 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       // Resume TTS after an auto-advance once the new page is in place
       if (ttsAdvancePendingRef.current) {
         ttsAdvancePendingRef.current = false
-        window.setTimeout(() => speakLatestRef.current(), 350)
+        if (ttsAdvanceTimerRef.current) clearTimeout(ttsAdvanceTimerRef.current)
+        ttsAdvanceTimerRef.current = window.setTimeout(() => speakLatestRef.current(), 350)
       }
     }
     rendition.on('relocated', onLocated)
@@ -155,6 +164,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       if ((e.key === ' ' || e.key === 'PageDown' || e.key === 'PageUp') &&
         e.target instanceof Element && e.target.closest('button, a')) return
       if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') {
+        if (e.key === 'Backspace') e.preventDefault()
         prev()
       } else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
         if (e.key === ' ' || e.key === 'PageDown') e.preventDefault()
@@ -206,6 +216,10 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       window.removeEventListener('epub-goto-cfi', onGotoCfi)
       window.removeEventListener('epub-goto-spine', onGotoSpine)
       rendition.off('relocated', onLocated)
+      if (ttsAdvanceTimerRef.current) {
+        clearTimeout(ttsAdvanceTimerRef.current)
+        ttsAdvanceTimerRef.current = null
+      }
       try {
         rendition.destroy()
       } catch { logger.warn('Rendition destroy failed') }
@@ -269,14 +283,13 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
 
 // TTS: extract the text of the current viewport via CFI range.
   const getCurrentText = useCallback((): string => {
-    const book = bookRef.current
     const rendition = renditionRef.current
     if (!book || !rendition) return ''
     try {
       const loc = rendition.currentLocation()
       const cfi = loc?.cfi
       if (!cfi) return ''
-      const range = book.getRange(cfi)
+      const range = rendition.getRange(cfi)
       // A page-start CFI ranges to the end of the section — cap it so a
       // single read-aloud session doesn't queue a huge chapter.
       const text = (range?.toString() ?? '').replace(/\s+/g, ' ').trim().slice(0, 10000)

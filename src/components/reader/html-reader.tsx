@@ -9,6 +9,8 @@ import {
   useReaderStore,
   fontFamilyCss,
   highlightColors,
+  themeBg,
+  themeFg,
   type HighlightColor,
   type Highlight,
 } from '@/store/reader-store'
@@ -25,6 +27,7 @@ interface Props {
 export function HtmlReader({ book, onProgress }: Props) {
   const [html, setHtml] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  const [decodeError, setDecodeError] = useState(false)
   const [page, setPage] = useState(0)
   const [pagesFlipped, setPagesFlipped] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -51,7 +54,10 @@ export function HtmlReader({ book, onProgress }: Props) {
         if (cancelled) return
         setHtml(text)
       })
-      .catch((e) => logger.error(e))
+      .catch((e) => {
+        logger.error(e)
+        if (!cancelled) setDecodeError(true)
+      })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
@@ -80,23 +86,40 @@ export function HtmlReader({ book, onProgress }: Props) {
 
   // Restore the saved position once the book is paginated
   const positionRestoredRef = useRef(false)
+  // In two-page mode the spread is aligned to an even left page, so the
+  // restored page stays visible (as the right page for odd indices).
+  const alignToSpread = (p: number) => (twoPage ? (p % 2 === 0 ? p : Math.max(0, p - 1)) : p)
+
+  // Reset per-book state when the user switches between two books of the
+  // same format — the component stays mounted and a stale restore flag
+  // would open the new book at the old book's page.
+  const bookIdRef = useRef(book.id)
+  /* eslint-disable react-hooks/refs */
+  if (book.id !== bookIdRef.current) {
+    bookIdRef.current = book.id
+    positionRestoredRef.current = false
+    setPage(0)
+    setPagesFlipped(0)
+  }
+  /* eslint-enable react-hooks/refs */
+
   useEffect(() => {
     if (totalPages === 0 || positionRestoredRef.current) return
     if (book.textPosition) {
       positionRestoredRef.current = true
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPage(findPageForPosition(book.textPosition))
+      setPage(alignToSpread(findPageForPosition(book.textPosition)))
     }
-  }, [totalPages, book.textPosition, findPageForPosition])
+  }, [totalPages, book.textPosition, findPageForPosition, alignToSpread])
 
   // Clamp the restored page once the book is paginated (the saved position
   // may exceed the page count for a different pagination)
   useEffect(() => {
     if (totalPages > 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPage((p) => Math.max(0, Math.min(p, totalPages - 1)))
+      setPage((p) => alignToSpread(Math.max(0, Math.min(p, totalPages - 1))))
     }
-  }, [totalPages])
+  }, [totalPages, alignToSpread])
 
   const currentPage = pages[page] || ''
   const twoPage = settings.twoPage
@@ -150,7 +173,15 @@ export function HtmlReader({ book, onProgress }: Props) {
 
   const next = useCallback(() => {
     const step = twoPage ? 2 : 1
-    if (totalPages === 0 || page + step >= totalPages) return
+    if (totalPages === 0 || page + step > totalPages - 1) {
+      // On the last odd page, a single-page step still flips the final page
+      if (twoPage && page + 1 <= totalPages - 1) {
+        setPage(page + 1)
+        setPagesFlipped((n) => n + 1)
+        containerRef.current?.scrollTo({ top: 0 })
+      }
+      return
+    }
     setPage(page + step)
     setPagesFlipped((n) => n + 1)
     containerRef.current?.scrollTo({ top: 0 })
@@ -163,7 +194,10 @@ export function HtmlReader({ book, onProgress }: Props) {
       if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
       if ((e.key === ' ' || e.key === 'PageDown' || e.key === 'PageUp') &&
         e.target instanceof Element && e.target.closest('button, a')) return
-      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') prev()
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') {
+        if (e.key === 'Backspace') e.preventDefault()
+        prev()
+      }
       else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
         if (e.key === ' ' || e.key === 'PageDown') e.preventDefault()
         next()
@@ -204,7 +238,7 @@ export function HtmlReader({ book, onProgress }: Props) {
     const onGotoPosition = (e: Event) => {
       const pos = (e as CustomEvent<number>).detail
       if (typeof pos === 'number') {
-        setPage(findPageForPosition(pos))
+        setPage(alignToSpread(findPageForPosition(pos)))
         containerRef.current?.scrollTo({ top: 0 })
       }
     }
@@ -213,7 +247,7 @@ export function HtmlReader({ book, onProgress }: Props) {
       if (typeof label === 'string') {
         const idx = pages.findIndex((p) => p.includes(label))
         if (idx >= 0) {
-          setPage(idx)
+          setPage(alignToSpread(idx))
           containerRef.current?.scrollTo({ top: 0 })
         }
       }
@@ -224,7 +258,7 @@ export function HtmlReader({ book, onProgress }: Props) {
       window.removeEventListener('txt-goto-position', onGotoPosition)
       window.removeEventListener('txt-goto', onGotoLabel)
     }
-  }, [totalPages, pages, findPageForPosition])
+  }, [totalPages, pages, findPageForPosition, alignToSpread])
 
   // Messages from the reader iframe: text selection and highlight clicks
   useEffect(() => {
@@ -294,6 +328,13 @@ export function HtmlReader({ book, onProgress }: Props) {
       {loading ? (
         <div className="flex h-full items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : decodeError ? (
+        <div className="flex h-full flex-col items-center justify-center gap-3">
+          <p className="text-sm text-muted-foreground">Не удалось прочитать файл книги</p>
+          <p className="text-xs text-muted-foreground/60">
+            Файл может быть повреждён или закодирован в неподдерживаемом формате
+          </p>
         </div>
       ) : (
         <div
@@ -390,7 +431,7 @@ export function HtmlReader({ book, onProgress }: Props) {
         variant="ghost"
         size="icon"
         onClick={prev}
-        disabled={page === 0}
+        disabled={twoPage ? page < 2 : page === 0}
         className="fixed left-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-black/5 hover:bg-black/10 disabled:opacity-20"
         aria-label="Назад"
       >
@@ -400,7 +441,7 @@ export function HtmlReader({ book, onProgress }: Props) {
         variant="ghost"
         size="icon"
         onClick={next}
-        disabled={page >= totalPages - 1}
+        disabled={twoPage ? page + pagesInSpread >= totalPages : page >= totalPages - 1}
         className="fixed right-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-black/5 hover:bg-black/10 disabled:opacity-20"
         aria-label="Вперёд"
       >
@@ -554,8 +595,15 @@ function buildPageHtml(
   settings: ReturnType<typeof useReaderStore.getState>['settings'],
   highlights: Highlight[],
 ): string {
-  const bg = 'var(--reader-bg)'
-  const fg = 'var(--reader-fg)'
+  // CSS custom properties set on the parent document (--reader-bg, --primary)
+  // do NOT propagate into an iframe document — embed the resolved values so
+  // HTML books actually respect the chosen theme.
+  const bg = themeBg[settings.theme]
+  const fg = themeFg[settings.theme]
+  const accent =
+    typeof document !== 'undefined'
+      ? getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()
+      : fg
   const fontFamily = fontFamilyCss[settings.fontFamily]
   const marked = markHighlights(content, highlights)
 
@@ -591,7 +639,7 @@ function buildPageHtml(
   img { max-width: 100%; height: auto; }
   p { margin: 0.8em 0; }
   blockquote {
-    border-left: 3px solid var(--primary);
+    border-left: 3px solid ${accent || fg};
     padding-left: 1em;
     margin: 1em 0;
     color: ${fg};

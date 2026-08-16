@@ -36,6 +36,7 @@ interface Props {
 export function TxtReader({ book, onProgress }: Props) {
   const [content, setContent] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  const [decodeError, setDecodeError] = useState(false)
   const [page, setPage] = useState(0)
   const [pagesFlipped, setPagesFlipped] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -68,7 +69,10 @@ export function TxtReader({ book, onProgress }: Props) {
         if (cancelled) return
         setContent(text)
       })
-      .catch((e) => logger.error(e))
+      .catch((e) => {
+        logger.error(e)
+        if (!cancelled) setDecodeError(true)
+      })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
@@ -96,6 +100,21 @@ export function TxtReader({ book, onProgress }: Props) {
   // restored page stays visible (as the right page for odd indices).
   const alignToSpread = (p: number) => (twoPage ? (p % 2 === 0 ? p : Math.max(0, p - 1)) : p)
   const positionRestoredRef = useRef(false)
+
+  // Reset per-book state when the user switches between two books of the
+  // same format — the component stays mounted and a stale restore flag
+  // would open the new book at the old book's page.
+  const bookIdRef = useRef(book.id)
+  /* eslint-disable react-hooks/refs */
+  if (book.id !== bookIdRef.current) {
+    bookIdRef.current = book.id
+    positionRestoredRef.current = false
+    setPage(0)
+    setPagesFlipped(0)
+    tts.stop()
+  }
+  /* eslint-enable react-hooks/refs */
+
   useEffect(() => {
     if (totalPages === 0 || positionRestoredRef.current) return
     if (book.textPosition) {
@@ -184,7 +203,10 @@ export function TxtReader({ book, onProgress }: Props) {
       // page turn (otherwise the floating nav buttons would double-flip)
       if ((e.key === ' ' || e.key === 'PageDown' || e.key === 'PageUp') &&
         e.target instanceof Element && e.target.closest('button, a')) return
-      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') prev()
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') {
+        if (e.key === 'Backspace') e.preventDefault()
+        prev()
+      }
       else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
         if (e.key === ' ' || e.key === 'PageDown') e.preventDefault()
         next()
@@ -194,13 +216,14 @@ export function TxtReader({ book, onProgress }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [prev, next])
 
-  // Bookmark navigation
+  // Bookmark navigation — align the target to the spread so the panel
+  // jump and the restore path behave identically in two-page mode
   useEffect(() => {
     const onGotoPosition = (e: Event) => {
       const pos = (e as CustomEvent<number>).detail
       if (typeof pos === 'number') {
         tts.stop()
-        setPage(findPageForPositionCb(pos))
+        setPage(alignToSpread(findPageForPositionCb(pos)))
         containerRef.current?.scrollTo({ top: 0 })
       }
     }
@@ -210,7 +233,7 @@ export function TxtReader({ book, onProgress }: Props) {
         const idx = pages.findIndex((p) => p.includes(label))
         if (idx >= 0) {
           tts.stop()
-          setPage(idx)
+          setPage(alignToSpread(idx))
           containerRef.current?.scrollTo({ top: 0 })
         }
       }
@@ -221,7 +244,7 @@ export function TxtReader({ book, onProgress }: Props) {
       window.removeEventListener('txt-goto-position', onGotoPosition)
       window.removeEventListener('txt-goto', onGotoLabel)
     }
-  }, [findPageForPositionCb, pages])
+  }, [findPageForPositionCb, pages, alignToSpread, tts])
 
   // Text selection → show color picker
   useEffect(() => {
@@ -319,9 +342,17 @@ export function TxtReader({ book, onProgress }: Props) {
   // the next page and keep reading (until the book ends or the user stops).
   const [autoRead, setAutoRead] = useState(false)
   const autoReadRef = useRef(false)
+  const ttsAdvanceTimerRef = useRef<number | null>(null)
   useEffect(() => {
     autoReadRef.current = autoRead
   }, [autoRead])
+  // Cancel a pending auto-advance speech on unmount — otherwise the timer
+  // reads a page of an unmounted reader aloud.
+  useEffect(() => {
+    return () => {
+      if (ttsAdvanceTimerRef.current) clearTimeout(ttsAdvanceTimerRef.current)
+    }
+  }, [])
 
   const speakCurrentPage = useCallback(() => {
     const text = currentPage.replace(/[#*_`>-]/g, '').replace(/\n+/g, ' ')
@@ -347,7 +378,8 @@ export function TxtReader({ book, onProgress }: Props) {
         setPagesFlipped((n) => n + 1)
         containerRef.current?.scrollTo({ top: 0 })
         // Give the new page a moment to render before speaking it
-        window.setTimeout(() => speakLatestRef.current(), 450)
+        if (ttsAdvanceTimerRef.current) clearTimeout(ttsAdvanceTimerRef.current)
+        ttsAdvanceTimerRef.current = window.setTimeout(() => speakLatestRef.current(), 450)
       },
     })
   }, [currentPage, settings.ttsRate, settings.ttsVoice, tts, twoPage])
@@ -466,6 +498,13 @@ export function TxtReader({ book, onProgress }: Props) {
       {loading ? (
         <div className="flex h-full items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : decodeError ? (
+        <div className="flex h-full flex-col items-center justify-center gap-3">
+          <p className="text-sm text-muted-foreground">Не удалось прочитать файл книги</p>
+          <p className="text-xs text-muted-foreground/60">
+            Файл может быть повреждён или закодирован в неподдерживаемом формате
+          </p>
         </div>
       ) : (
         <div

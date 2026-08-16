@@ -85,7 +85,18 @@ export function useTTS() {
     const chunks = splitIntoChunks(text)
     const starts = chunks.map((c) => c.start)
     chunksRef.current = chunks.map((c) => c.text)
-    if (chunks.length === 0) return
+    if (chunks.length === 0) {
+      // Nothing to say (blank/whitespace-only page) — do not leave the UI
+      // in a fake "speaking" state with a stop control that does nothing.
+      setState({
+        speaking: false,
+        paused: false,
+        currentChunk: 0,
+        totalChunks: 0,
+        currentChunkStart: 0,
+      })
+      return
+    }
 
     setState({
       speaking: true,
