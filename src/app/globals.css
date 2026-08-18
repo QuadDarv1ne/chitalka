@@ -119,4 +119,29 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Reader-specific CSS variables — used by the reader component to
+     avoid leaking theme colors into the app chrome and vice versa. */
+  :root {
+    --reader-bg: var(--background);
+    --reader-fg: var(--foreground);
+  }
+}
+
+/* Reader themes — override the CSS variables when the reader is active */
+.reader-theme-light {
+  --reader-bg: #fafaf7;
+  --reader-fg: #1c1c1c;
+}
+.reader-theme-dark {
+  --reader-bg: #1a1a1a;
+  --reader-fg: #d4d4d4;
+}
+.reader-theme-sepia {
+  --reader-bg: #f4ecd8;
+  --reader-fg: #5b4636;
+}
+.reader-theme-contrast {
+  --reader-bg: #000000;
+  --reader-fg: #ffffff;
 }

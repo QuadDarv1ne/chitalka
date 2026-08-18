@@ -869,7 +869,7 @@ const ContinueReadingCard = memo(function ContinueReadingCard({
   return (
     <button
       onClick={onClick}
-      className="group flex items-center gap-3 rounded-lg border p-3 hover:shadow-md transition-all text-left"
+      className="group flex items-center gap-3 rounded-lg border p-3 hover:shadow-md transition-all text-left w-full"
     >
       <div className="h-16 w-12 bg-muted rounded overflow-hidden flex-shrink-0">
         {book.cover ? (
@@ -877,6 +877,7 @@ const ContinueReadingCard = memo(function ContinueReadingCard({
             src={book.cover}
             alt={book.title}
             className="h-full w-full object-cover"
+            loading="lazy"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
@@ -898,11 +899,18 @@ const ContinueReadingCard = memo(function ContinueReadingCard({
             {Math.round(progress * 100)}%
           </span>
         </div>
-        {remainingLabel && (
-          <p className="mt-1 text-xs text-muted-foreground/80">
-            Осталось: {remainingLabel}
-          </p>
-        )}
+        <div className="mt-1 flex items-center justify-between">
+          {remainingLabel && (
+            <p className="text-xs text-muted-foreground/80">
+              Осталось: {remainingLabel}
+            </p>
+          )}
+          {book.rating && (
+            <span className="text-xs text-amber-500">
+              {'★'.repeat(book.rating)}{'☆'.repeat(5 - book.rating)}
+            </span>
+          )}
+        </div>
       </div>
     </button>
   )

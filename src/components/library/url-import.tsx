@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -31,10 +31,17 @@ const MAX_FILE_SIZE = 500 * 1024 * 1024 // matches library.tsx
 export function UrlImportDialog({ open, onOpenChange, onImported }: Props) {
   const [url, setUrl] = useState('')
   const [downloading, setDownloading] = useState(false)
+  const [progress, setProgress] = useState<number | null>(null)
+  const xhrRef = useRef<XMLHttpRequest | null>(null)
 
   const handleOpenChange = (v: boolean) => {
     if (!v) {
       setUrl('')
+      setProgress(null)
+      if (xhrRef.current) {
+        xhrRef.current.abort()
+        xhrRef.current = null
+      }
     }
     onOpenChange(v)
   }
@@ -54,17 +61,43 @@ export function UrlImportDialog({ open, onOpenChange, onImported }: Props) {
       return
     }
     setDownloading(true)
+    setProgress(0)
+
     try {
-      const res = await fetch(parsed.toString())
-      if (!res.ok) throw new Error(`Сервер ответил: HTTP ${res.status}`)
-      const blob = await res.blob()
-      if (blob.size === 0) throw new Error('Файл пустой')
-      if (blob.size > MAX_FILE_SIZE) {
+      // Use XMLHttpRequest for progress tracking instead of fetch
+      const xhr = new XMLHttpRequest()
+      xhrRef.current = xhr
+
+      xhr.onprogress = (e) => {
+        if (e.lengthComputable && e.total > 0) {
+          setProgress(Math.round((e.loaded / e.total) * 50)) // first 50% is download
+        }
+      }
+
+      const response = await new Promise<Blob>((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(new Blob([xhr.response]))
+          } else {
+            reject(new Error(`Сервер ответил: HTTP ${xhr.status}`))
+          }
+        }
+        xhr.onerror = () => reject(new TypeError('Ошибка сети'))
+        xhr.open('GET', parsed.toString())
+        xhr.responseType = 'blob'
+        xhr.send()
+      })
+
+      setProgress(50)
+
+      if (response.size === 0) throw new Error('Файл пустой')
+      if (response.size > MAX_FILE_SIZE) {
         throw new Error('Файл слишком большой (макс. 500 МБ)')
       }
+
       // Filename: Content-Disposition header, then the URL path
       let name = ''
-      const cd = res.headers.get('content-disposition')
+      const cd = xhr.getResponseHeader('content-disposition')
       if (cd) {
         const m = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
         if (m) name = decodeURIComponent(m[1].replace(/"/g, '').trim())
@@ -80,14 +113,15 @@ export function UrlImportDialog({ open, onOpenChange, onImported }: Props) {
           `Формат файла «${name}» не поддерживается (нужен EPUB, PDF, FB2, TXT, MD, HTML или MP3)`,
         )
       }
-      const file = new File([blob], name, { type: blob.type })
+
+      setProgress(75)
+      const file = new File([response], name, { type: response.type })
       onImported([file])
       handleOpenChange(false)
       toast.success('Файл скачан, добавляем в библиотеку…')
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Не удалось скачать файл'
       if (e instanceof TypeError) {
-        // fetch() throws TypeError on network errors AND CORS blocks
         toast.error(
           'Сервер заблокировал загрузку (CORS) или нет соединения. Попробуйте прямую ссылку на файл.',
         )
@@ -96,6 +130,8 @@ export function UrlImportDialog({ open, onOpenChange, onImported }: Props) {
       }
     } finally {
       setDownloading(false)
+      setProgress(null)
+      xhrRef.current = null
     }
   }
 
@@ -127,7 +163,21 @@ export function UrlImportDialog({ open, onOpenChange, onImported }: Props) {
             type="url"
             inputMode="url"
             autoComplete="url"
+            disabled={downloading}
           />
+          {downloading && progress !== null && (
+            <div className="space-y-1">
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                {progress < 50 ? 'Скачивание…' : 'Обработка…'} {progress}%
+              </p>
+            </div>
+          )}
           <Button type="submit" disabled={downloading || !url.trim()} className="gap-1.5">
             {downloading ? (
               <Loader2 className="h-4 w-4 animate-spin" />

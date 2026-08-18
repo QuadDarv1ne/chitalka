@@ -21,6 +21,7 @@ import {
   Save,
   KeyRound,
   AlertTriangle,
+  Download,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useReaderStore } from '@/store/reader-store'
@@ -487,6 +488,52 @@ export function Account() {
               Завершить все другие сессии
             </Button>
           )}
+        </Card>
+
+        {/* Export data section */}
+        <Card className="p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Download className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Экспорт данных</h2>
+          </div>
+
+          <p className="text-sm text-muted-foreground mb-4">
+            Скачайте все данные аккаунта в формате JSON: прогресс чтения,
+            оценки книг и настройки читалки. Книги (файлы) не экспортируются —
+            они хранятся только в вашем браузере.
+          </p>
+
+          <Button
+            onClick={async () => {
+              try {
+                const res = await fetch('/api/user/export', {
+                  credentials: 'include',
+                })
+                if (!res.ok) {
+                  const data = await res.json().catch(() => ({}))
+                  toast.error(data.error || 'Ошибка экспорта')
+                  return
+                }
+                const blob = await res.blob()
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `chitalka-export-${new Date().toISOString().slice(0, 10)}.json`
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+                toast.success('Данные экспортированы')
+              } catch (e) {
+                logger.error(e)
+                toast.error('Ошибка экспорта')
+              }
+            }}
+            className="gap-1.5"
+          >
+            <Download className="h-4 w-4" />
+            Скачать данные аккаунта
+          </Button>
         </Card>
 
         {/* Danger zone */}
