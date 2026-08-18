@@ -27,6 +27,7 @@ import { TxtReader } from './txt-reader'
 import { PdfReader } from './pdf-reader'
 import { AudioReader } from './audio-reader'
 import { HtmlReader } from './html-reader'
+import { CbzReader } from './cbz-reader'
 import { ReaderSettingsPanel } from './settings-panel'
 import { TocPanel } from './toc-panel'
 import { BookmarksPanel } from './bookmarks-panel'
@@ -392,7 +393,7 @@ export function Reader() {
       </header>
       )}
 
-{/* Reader body */}
+      {/* Reader body */}
       <div className="flex-1">
         {book.format === 'epub' ? (
           <EpubReader book={book} onProgress={handleProgressChange} />
@@ -402,6 +403,8 @@ export function Reader() {
           <AudioReader book={book} onProgress={handleProgressChange} />
         ) : book.format === 'html' ? (
           <HtmlReader book={book} onProgress={handleProgressChange} />
+        ) : book.format === 'cbz' ? (
+          <CbzReader book={book} onProgress={handleProgressChange} />
         ) : (
           <TxtReader book={book} onProgress={handleProgressChange} />
         )}

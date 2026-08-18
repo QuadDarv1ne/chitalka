@@ -11,7 +11,7 @@ export interface ParsedBook {
   author: string
   cover?: string
   description?: string
-  format: 'epub' | 'txt' | 'md' | 'html' | 'pdf' | 'fb2' | 'mp3'
+  format: 'epub' | 'txt' | 'md' | 'html' | 'pdf' | 'fb2' | 'mp3' | 'cbz'
 }
 
 export function detectFormat(filename: string): BookRecord['format'] | null {
@@ -23,6 +23,7 @@ export function detectFormat(filename: string): BookRecord['format'] | null {
   if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'html'
   if (lower.endsWith('.txt')) return 'txt'
   if (lower.endsWith('.mp3') || lower.endsWith('.mp3.zip')) return 'mp3'
+  if (lower.endsWith('.cbz')) return 'cbz'
   return null
 }
 
@@ -353,7 +354,7 @@ export async function parseFb2Content(file: File): Promise<string> {
   }
 }
 
-export async function parseTextMeta(file: File, format: 'txt' | 'md' | 'html'): Promise<ParsedBook> {
+export async function parseTextMeta(file: File, format: 'txt' | 'md' | 'html' | 'cbz'): Promise<ParsedBook> {
   const head = await file.slice(0, 4096).arrayBuffer()
   const text = decodeTextBytes(head)
   // For markdown, try first H1
@@ -462,9 +463,52 @@ export interface AudioTrack {
 }
 
 /**
- * Extract MP3 tracks from a .mp3.zip archive.
- * Returns tracks sorted by filename (natural sort).
+ * Extract images from a CBZ file (Comic Book ZIP).
+ * Returns images sorted by filename (natural sort).
  */
+export async function extractCbzImages(file: File | Blob): Promise<{ name: string; blob: Blob }[]> {
+  const buffer = await file.arrayBuffer()
+  const entries = await unzip(buffer)
+
+  // Collect image files (skip directories, metadata, etc.)
+  const imageEntries: { name: string; data: Uint8Array }[] = []
+  const imageExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif'])
+  
+  for (const [name, data] of Object.entries(entries)) {
+    if (!name.endsWith('/')) {
+      const ext = name.slice(name.lastIndexOf('.')).toLowerCase()
+      if (imageExtensions.has(ext)) {
+        imageEntries.push({ name, data })
+      }
+    }
+  }
+
+  // Natural sort by filename
+  const naturalCompare = (a: string, b: string) => {
+    const aParts = a.match(/(\d+|\D+)/g) || [a]
+    const bParts = b.match(/(\d+|\D+)/g) || [b]
+    for (let i = 0; i < Math.min(aParts.length, bParts.length); i++) {
+      const aNum = /^\d+$/.test(aParts[i])
+      const bNum = /^\d+$/.test(bParts[i])
+      if (aNum && bNum) {
+        const diff = parseInt(aParts[i], 10) - parseInt(bParts[i], 10)
+        if (diff !== 0) return diff
+      } else {
+        const cmp = aParts[i].localeCompare(bParts[i])
+        if (cmp !== 0) return cmp
+      }
+    }
+    return aParts.length - bParts.length
+  }
+
+  imageEntries.sort((a, b) => naturalCompare(a.name, b.name))
+
+  return imageEntries.map((img) => ({
+    name: img.name,
+    blob: new Blob([img.data.slice()], { type: 'image/' + img.name.slice(img.name.lastIndexOf('.') + 1).toLowerCase() }),
+  }))
+}
+
 export async function extractAudioTracks(file: File | Blob): Promise<AudioTrack[]> {
   const buffer = await file.arrayBuffer()
   const entries = await unzip(buffer)

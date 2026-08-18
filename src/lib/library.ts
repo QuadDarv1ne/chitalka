@@ -7,7 +7,7 @@ export interface BookRecord {
   id: string
   title: string
   author: string
-  format: 'epub' | 'txt' | 'md' | 'html' | 'pdf' | 'fb2' | 'mp3'
+  format: 'epub' | 'txt' | 'md' | 'html' | 'pdf' | 'fb2' | 'mp3' | 'cbz'
   size: number
   cover?: string // data URL
   blob: Blob
@@ -22,13 +22,14 @@ export interface BookRecord {
   description?: string
   userId?: string | null // null = anonymous (logged out)
   rating?: number // 1-5 stars
+  favorite?: boolean // is this book a favorite?
 }
 
 interface LibraryDB extends DBSchema {
   books: {
     key: string
     value: BookRecord
-    indexes: { 'by-addedAt': number; 'by-lastOpenedAt': number; 'by-userId': string }
+    indexes: { 'by-addedAt': number; 'by-lastOpenedAt': number; 'by-userId': string; 'by-favorite': number }
   }
 }
 
@@ -53,7 +54,7 @@ function getDB() {
     // Reset on failure so a transient open error (blocked upgrade, quota,
     // private-mode SecurityError) doesn't poison every later call until a
     // page reload — the next getDB() attempt starts a fresh open.
-    dbPromise = openDB<LibraryDB>('reader-library', 3, {
+    dbPromise = openDB<LibraryDB>('reader-library', 4, {
       upgrade(db, oldVersion, _newVersion, transaction) {
         if (oldVersion < 1) {
           const store = db.createObjectStore('books', { keyPath: 'id' })
@@ -70,6 +71,13 @@ function getDB() {
         }
         if (oldVersion === 2) {
           // v2 → v3: no schema changes, but reset stale DB state
+        }
+        if (oldVersion === 3) {
+          // v3 → v4: add favorite index
+          const store = transaction.objectStore('books')
+          if (!store.indexNames.contains('by-favorite')) {
+            store.createIndex('by-favorite', 'favorite')
+          }
         }
       },
     }).catch((e) => {
@@ -125,7 +133,7 @@ export async function getBook(id: string) {
  * Pass userId=null to get anonymous books only.
  * Pass userId=undefined to get all books (admin/dev mode).
  */
-export async function getAllBooks(userId?: string | null) {
+export async function getAllBooks(userId?: string | null, options?: { favoriteOnly?: boolean }) {
   const db = await getDB()
   let all: BookRecord[]
   if (typeof userId === 'string') {
@@ -135,6 +143,10 @@ export async function getAllBooks(userId?: string | null) {
     all = all.filter((b) => (b.userId ?? null) === null)
   } else {
     all = await db.getAll('books')
+  }
+  // Filter by favorite if requested
+  if (options?.favoriteOnly) {
+    all = all.filter((b) => b.favorite)
   }
   return all.sort((a, b) => (b.lastOpenedAt ?? b.addedAt) - (a.lastOpenedAt ?? a.addedAt))
 }
@@ -203,4 +215,17 @@ export async function reassignBooksToUser(
   }
   await Promise.all(promises)
   return toUpdate.length
+}
+
+/**
+ * Toggle the favorite status of a book.
+ */
+export async function toggleFavorite(bookId: string): Promise<boolean> {
+  const db = await getDB()
+  const book = await db.get('books', bookId)
+  if (!book) return false
+  
+  const newFavorite = !book.favorite
+  await db.put('books', { ...book, favorite: newFavorite })
+  return newFavorite
 }

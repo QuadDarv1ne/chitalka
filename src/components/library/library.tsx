@@ -43,6 +43,7 @@ import {
   RotateCcw,
   Dices,
   Link2,
+  Heart,
 } from 'lucide-react'
 import {
   getAllBooks,
@@ -51,6 +52,7 @@ import {
   updateBook,
   reassignBooksToUser,
   hashFileHead,
+  toggleFavorite,
   type BookRecord,
 } from '@/lib/library'
 import {
@@ -92,6 +94,7 @@ import { UrlImportDialog } from './url-import'
 type SortKey = 'recent' | 'title' | 'added' | 'progress' | 'rating'
 type FormatFilter = 'all' | 'epub' | 'pdf' | 'txt' | 'md' | 'fb2' | 'html' | 'mp3'
 type StatusFilter = 'all' | 'reading' | 'finished'
+type FavoriteFilter = 'all' | 'favorites'
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500 MB (includes large audiobooks)
 
@@ -103,6 +106,7 @@ const FORMAT_BADGES: Record<string, { label: string; color: string }> = {
   html: { label: 'HTML', color: 'bg-orange-600 text-white' },
   fb2: { label: 'FB2', color: 'bg-cyan-600 text-white' },
   mp3: { label: 'MP3', color: 'bg-amber-600 text-white' },
+  cbz: { label: 'CBZ', color: 'bg-pink-600 text-white' },
 }
 
 const isFinished = (progress?: number) => progress !== undefined && progress >= 0.99
@@ -114,6 +118,7 @@ export function Library() {
   const [sort, setSort] = useState<SortKey>('recent')
   const [formatFilter, setFormatFilter] = useState<FormatFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [favoriteFilter, setFavoriteFilter] = useState<FavoriteFilter>('all')
   const [dragOver, setDragOver] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<BookRecord | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -331,6 +336,17 @@ export function Library() {
     toast.success(rating > 0 ? `Оценка: ${rating} из 5` : 'Рейтинг удалён')
   }, [])
 
+  const handleToggleFavorite = useCallback(async (id: string, title: string) => {
+    try {
+      const isFav = await toggleFavorite(id)
+      setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, favorite: isFav } : b)))
+      toast.success(isFav ? `«${title}» добавлена в избранное` : `«${title}» удалена из избранного`)
+    } catch (e) {
+      logger.error('Favorite toggle failed', e)
+      toast.error('Ошибка изменения избранного')
+    }
+  }, [])
+
   const handleResetProgress = useCallback(
     async (id: string, title: string) => {
       await updateBook(id, {
@@ -391,6 +407,10 @@ export function Library() {
       if (statusFilter === 'reading') return (b.progress ?? 0) > 0 && !isFinished(b.progress)
       return true
     })
+    .filter((b) => {
+      if (favoriteFilter === 'favorites') return b.favorite
+      return true
+    })
     .filter(
       (b) =>
         b.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -402,7 +422,7 @@ export function Library() {
       if (sort === 'progress') return (b.progress ?? 0) - (a.progress ?? 0)
       if (sort === 'rating') return (b.rating ?? 0) - (a.rating ?? 0)
       return (b.lastOpenedAt ?? 0) - (a.lastOpenedAt ?? 0)
-    }), [books, formatFilter, statusFilter, search, sort])
+    }), [books, formatFilter, statusFilter, favoriteFilter, search, sort])
 
   const stats = {
     total: books.length,
@@ -616,6 +636,14 @@ export function Library() {
                 ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>Статус</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => setFavoriteFilter('all')}>
+                  Все книги
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFavoriteFilter('favorites')}>
+                  <Heart className="h-4 w-4 mr-2" /> Избранные
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Формат</DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => setStatusFilter('all')}>
                   Все книги
                 </DropdownMenuItem>
@@ -766,6 +794,7 @@ export function Library() {
                   onOpen={() => openBook(book.id)}
                   onDelete={() => setDeleteTarget(book)}
                   onDetails={() => setDetailsTarget(book)}
+                  onFavorite={() => handleToggleFavorite(book.id, book.title)}
                 />
               ))}
             </div>
@@ -848,6 +877,27 @@ export function Library() {
         onDownload={() => {
           if (detailsTarget) downloadBookFile(detailsTarget)
         }}
+        onMarkAsRead={() => {
+          if (detailsTarget) {
+            updateBook(detailsTarget.id, {
+              progress: 1,
+              lastOpenedAt: Date.now(),
+            }).then(() => {
+              setBooks((prev) =>
+                prev.map((b) =>
+                  b.id === detailsTarget.id
+                    ? { ...b, progress: 1, lastOpenedAt: Date.now() }
+                    : b
+                )
+              )
+              toast.success(`«${detailsTarget.title}» отмечена как прочитанная`)
+              setDetailsTarget(null)
+            }).catch((e) => {
+              logger.error('Mark as read failed', e)
+              toast.error('Ошибка сохранения')
+            })
+          }
+        }}
       />
     </div>
   )
@@ -921,11 +971,13 @@ const BookCard = memo(function BookCard({
   onOpen,
   onDelete,
   onDetails,
+  onFavorite,
 }: {
   book: BookRecord
   onOpen: () => void
   onDelete: () => void
   onDetails: () => void
+  onFavorite: () => void
 }) {
   const badge = FORMAT_BADGES[book.format]
   const stars = book.rating ? '★'.repeat(book.rating) + '☆'.repeat(5 - book.rating) : ''
@@ -972,6 +1024,19 @@ const BookCard = memo(function BookCard({
           </Button>
         </div>
         <div className="absolute top-2 right-2 flex items-center gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onFavorite()
+            }}
+            className={`h-8 w-8 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-amber-500 ${
+              book.favorite ? 'opacity-100 !bg-amber-500' : ''
+            }`}
+            aria-label={book.favorite ? 'Удалить из избранного' : 'Добавить в избранное'}
+            title={book.favorite ? 'Удалить из избранного' : 'Добавить в избранное'}
+          >
+            <Heart className={`h-4 w-4 ${book.favorite ? 'fill-current' : ''}`} />
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -1079,6 +1144,7 @@ function BookDetailsDialog({
   onRate,
   onResetProgress,
   onDownload,
+  onMarkAsRead,
 }: {
   book: BookRecord | null
   sessions: ReadingSession[]
@@ -1089,6 +1155,7 @@ function BookDetailsDialog({
   onRate: (rating: number) => void
   onResetProgress: () => void
   onDownload: () => void
+  onMarkAsRead: () => void
 }) {
   const [hoverRating, setHoverRating] = useState(0)
   if (!book) return null
@@ -1239,15 +1306,32 @@ function BookDetailsDialog({
 
         <div className="flex justify-between gap-2 mt-2">
           <div className="flex gap-2">
-            {progress > 0 && (
+            {progress > 0 && !finished && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={onResetProgress}
+                onClick={() => {
+                  onResetProgress()
+                  onClose()
+                }}
                 className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Сбросить прогресс
+              </Button>
+            )}
+            {progress > 0 && progress < 0.99 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  onMarkAsRead()
+                  onClose()
+                }}
+                className="gap-1.5 text-xs bg-green-50 hover:bg-green-100 text-green-700 border-green-200 hover:border-green-300"
+              >
+                <Check className="h-3.5 w-3.5" />
+                Прочитана
               </Button>
             )}
             <Button

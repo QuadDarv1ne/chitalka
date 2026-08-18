@@ -24,7 +24,7 @@ export function estimateRemainingMinutes(
   return minutes
 }
 
-type BookFormat = 'epub' | 'txt' | 'md' | 'html' | 'pdf' | 'fb2' | 'mp3'
+type BookFormat = 'epub' | 'txt' | 'md' | 'html' | 'pdf' | 'fb2' | 'mp3' | 'cbz'
 
 /** Format a minutes count into a short human-readable string. */
 export function formatMinutes(minutes: number): string {
