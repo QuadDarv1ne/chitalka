@@ -110,6 +110,17 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       try {
         await epubBook.ready
         if (disposed) return
+        // Generate the location map BEFORE the first display(): epubjs computes
+        // relocated.percentage from book.locations, and until generate() runs
+        // the map is empty — every location would report 0% and overwrite the
+        // saved progress on open. Generation is heavy for huge books, so a
+        // failure only degrades the percentage, never the CFI restore.
+        try {
+          await epubBook.locations.generate()
+        } catch (e) {
+          logger.warn('EPUB: locations.generate failed, % progress will be unreliable', e)
+        }
+        if (disposed) return
         // Restore CFI if available — a stale/invalid CFI (book file replaced,
         // bookmark from another edition) must not leave the reader stuck.
         try {
@@ -232,7 +243,10 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       renditionRef.current = null
       renderedRef.current = false
     }
-  }, [book.id])
+    // Recreate the rendition when the spread mode changes — epubjs fixes the
+    // spread at renderTo() time, so toggling "разворот" requires a rebuild.
+    // Position is restored from book.cfi (kept fresh by onLocated).
+  }, [book.id, settings.twoPage])
 
   // Apply theme + font settings.
   // Runs only after the rendition is fully rendered (display() completed).
@@ -287,7 +301,9 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
     if (!book || !rendition) return ''
     try {
       const loc = rendition.currentLocation()
-      const cfi = loc?.cfi
+      // currentLocation() returns { start, end, atStart, atEnd } — the CFI
+      // lives on start/end, not on the top level.
+      const cfi = loc?.start?.cfi || loc?.end?.cfi
       if (!cfi) return ''
       const range = rendition.getRange(cfi)
       // A page-start CFI ranges to the end of the section — cap it so a

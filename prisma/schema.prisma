@@ -88,6 +88,12 @@ model BookMeta {
   format       String
   progress     Float    @default(0)
   lastOpenedAt DateTime?
+  cfi          String?  // EPUB CFI position
+  textPosition Int?     // char offset for txt
+  pdfPage      Int?     // PDF page number
+  cbzPage      Int?     // CBZ page index (0-based)
+  audioTrack   Int?     // MP3 track index (0-based)
+  audioTime    Float?   // seconds played within current track
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)

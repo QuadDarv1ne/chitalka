@@ -75,7 +75,7 @@ import {
 import { getWordsPerMinute } from '@/store/reader-store'
 import { estimateRemainingMinutes, formatMinutes } from '@/lib/constants'
 import { useAuth } from '@/hooks/use-auth'
-import { useBookSync } from '@/hooks/use-book-sync'
+import { useBookSync, useServerBookSync } from '@/hooks/use-book-sync'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -144,6 +144,9 @@ export function Library() {
 
   // Sync book progress to server (when user is verified)
   useBookSync(books)
+
+  // Pull server-side book metadata into local IndexedDB
+  useServerBookSync(refresh)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -354,6 +357,7 @@ export function Library() {
         cfi: undefined,
         textPosition: undefined,
         pdfPage: undefined,
+        cbzPage: undefined,
         audioTrack: undefined,
         audioTime: undefined,
         lastOpenedAt: undefined,

@@ -40,6 +40,7 @@ export interface Bookmark {
   cfi?: string
   textPosition?: number
   pdfPage?: number
+  cbzPage?: number
   label: string
   createdAt: number
 }
@@ -53,6 +54,7 @@ export interface Highlight {
   cfi?: string
   textPosition?: number
   pdfPage?: number
+  cbzPage?: number
   createdAt: number
 }
 
@@ -63,6 +65,7 @@ export interface BookNote {
   cfi?: string
   textPosition?: number
   pdfPage?: number
+  cbzPage?: number
   createdAt: number
 }
 

@@ -38,6 +38,10 @@ export function HighlightsPanel({ book, onNavigate }: Props) {
       window.dispatchEvent(
         new CustomEvent('pdf-goto-page', { detail: h.pdfPage }),
       )
+    } else if (book.format === 'cbz' && h.cbzPage !== undefined) {
+      window.dispatchEvent(
+        new CustomEvent('cbz-goto-page', { detail: h.cbzPage }),
+      )
     } else if (h.textPosition !== undefined) {
       window.dispatchEvent(
         new CustomEvent('txt-goto-position', { detail: h.textPosition }),
@@ -123,7 +127,17 @@ export function HighlightsPanel({ book, onNavigate }: Props) {
                           {h.note}
                         </p>
                       )}
-                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-1">
+                      {h.pdfPage !== undefined && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Страница {h.pdfPage}
+                        </p>
+                      )}
+                      {h.cbzPage !== undefined && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Страница {h.cbzPage + 1}
+                        </p>
+                      )}
+                      {h.textPosition !== undefined && (
                         <FileText className="h-3 w-3" />
                         {new Date(h.createdAt).toLocaleString('ru-RU', {
                           day: 'numeric',

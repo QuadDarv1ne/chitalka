@@ -3,7 +3,7 @@
 import { logger } from '@/lib/logger'
 import { useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/hooks/use-auth'
-import type { BookRecord } from '@/lib/library'
+import { updateBook, getBook, type BookRecord } from '@/lib/library'
 
 const MIN_BETWEEN = 30_000
 const BASE_INTERVAL = 60_000
@@ -17,7 +17,32 @@ export function bookToSyncPayload(b: BookRecord) {
     format: b.format,
     progress: b.progress ?? 0,
     lastOpenedAt: b.lastOpenedAt,
+    cfi: b.cfi,
+    textPosition: b.textPosition,
+    pdfPage: b.pdfPage,
+    cbzPage: b.cbzPage,
+    audioTrack: b.audioTrack,
+    audioTime: b.audioTime,
   }
+}
+
+/**
+ * SyncBook from server response — contains only metadata fields.
+ */
+export interface SyncBook {
+  bookId: string
+  title: string
+  author: string
+  format: string
+  progress: number
+  lastOpenedAt: number | null
+  cfi: string | null
+  textPosition: number | null
+  pdfPage: number | null
+  cbzPage: number | null
+  audioTrack: number | null
+  audioTime: number | null
+  updatedAt: number
 }
 
 /**
@@ -35,6 +60,79 @@ export async function syncBooksToServer(books: BookRecord[]): Promise<number | n
   } catch (e) {
     logger.error('Book sync failed', e)
     return null
+  }
+}
+
+/**
+ * Fetch server-side book metadata and apply to local IndexedDB.
+ * Returns the number of books updated locally.
+ *
+ * Conflict resolution: server wins only if its updatedAt is newer than
+ * the local record's last write. This avoids overwriting a local change
+ * that happened after the last sync.
+ */
+export async function syncBooksFromServer(): Promise<{ updated: number; localOnly: number }> {
+  try {
+    const res = await fetch('/api/books/sync')
+    if (res.status === 401) return { updated: 0, localOnly: 0 }
+
+    if (!res.ok) {
+      logger.error('Failed to fetch synced books', await res.text())
+      return { updated: 0, localOnly: 0 }
+    }
+
+    const data = await res.json()
+    const serverBooks: SyncBook[] = data?.books ?? []
+    if (serverBooks.length === 0) return { updated: 0, localOnly: 0 }
+
+    let updated = 0
+    let localOnly = 0
+    const serverIds = new Set<string>()
+
+    for (const sb of serverBooks) {
+      serverIds.add(sb.bookId)
+      const local = await getBook(sb.bookId)
+
+      if (!local) {
+        // Book exists on server but not locally — this shouldn't normally
+        // happen (books are local-first), but skip it to avoid creating
+        // records without blobs.
+        continue
+      }
+
+      // Compare updatedAt timestamps: only apply server data if it's newer
+      // than the local record's last modification. We use local addedAt as a
+      // proxy for "last meaningful write" since we don't track per-field
+      // timestamps. If the server has a more recent updatedAt, its version
+      // of progress/position is fresher.
+      const serverTime = sb.updatedAt
+      const localTime = local.lastOpenedAt ?? local.addedAt
+
+      if (serverTime > localTime) {
+        await updateBook(sb.bookId, {
+          progress: sb.progress,
+          lastOpenedAt: sb.lastOpenedAt ?? undefined,
+          cfi: sb.cfi ?? undefined,
+          textPosition: sb.textPosition ?? undefined,
+          pdfPage: sb.pdfPage ?? undefined,
+          cbzPage: sb.cbzPage ?? undefined,
+          audioTrack: sb.audioTrack ?? undefined,
+          audioTime: sb.audioTime ?? undefined,
+        })
+        updated++
+      } else {
+        localOnly++
+      }
+    }
+
+    if (updated > 0) {
+      logger.info(`Synced ${updated} book(s) from server`)
+    }
+
+    return { updated, localOnly }
+  } catch (e) {
+    logger.error('Book sync from server failed', e)
+    return { updated: 0, localOnly: 0 }
   }
 }
 
@@ -101,4 +199,42 @@ export function useBookSync(books: BookRecord[]) {
       void sync(true)
     }
   }, [user, sync])
+}
+
+/**
+ * Hook to pull server-side book metadata into local IndexedDB.
+ * Triggers on login and periodically while authenticated.
+ */
+export function useServerBookSync(refresh: () => Promise<void>) {
+  const { user } = useAuth()
+  const lastPullRef = useRef(0)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const disabledRef = useRef(false)
+  const pullRef = useRef<() => void>(() => {})
+
+  const pull = useCallback(async () => {
+    if (!user || !user.emailVerified || disabledRef.current) return
+    const now = Date.now()
+    // Throttle: max once per 60 seconds
+    if (now - lastPullRef.current < 60_000) return
+    lastPullRef.current = now
+
+    const { updated } = await syncBooksFromServer()
+    if (updated > 0) {
+      void refresh()
+    }
+    if (updated === 0 && !disabledRef.current) {
+      // Keep pulling periodically
+      timerRef.current = setTimeout(() => void pullRef.current(), BASE_INTERVAL)
+    }
+  }, [user, refresh])
+
+  useEffect(() => {
+    pullRef.current = pull
+  }, [pull])
+
+  useEffect(() => {
+    if (!user?.emailVerified) return
+    void pull()
+  }, [user])
 }

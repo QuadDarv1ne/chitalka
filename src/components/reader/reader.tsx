@@ -69,6 +69,7 @@ export function Reader() {
   const [currentCfi, setCurrentCfi] = useState<string | undefined>(undefined)
   const [currentTextPosition, setCurrentTextPosition] = useState<number | undefined>(undefined)
   const [currentPdfPage, setCurrentPdfPage] = useState<number | undefined>(undefined)
+  const [currentCbzPage, setCurrentCbzPage] = useState<number | undefined>(undefined)
   const [estimatedRemainingMinutes, setEstimatedRemainingMinutes] = useState<number | null>(null)
 
   useEffect(() => {
@@ -82,6 +83,7 @@ export function Reader() {
         setCurrentCfi(b?.cfi)
         setCurrentTextPosition(b?.textPosition)
         setCurrentPdfPage(b?.pdfPage)
+        setCurrentCbzPage(b?.cbzPage)
         if (b) {
           updateBook(b.id, { lastOpenedAt: Date.now() }).catch(() => {})
           // Calculate estimated remaining reading time
@@ -146,12 +148,13 @@ export function Reader() {
   const handleProgressChange = useCallback(
     async (
       p: number,
-      extra?: { cfi?: string; textPosition?: number; pdfPage?: number; audioTrack?: number; audioTime?: number },
+      extra?: { cfi?: string; textPosition?: number; pdfPage?: number; cbzPage?: number; audioTrack?: number; audioTime?: number },
     ) => {
       setProgress(p)
       if (extra?.cfi !== undefined) setCurrentCfi(extra.cfi)
       if (extra?.textPosition !== undefined) setCurrentTextPosition(extra.textPosition)
       if (extra?.pdfPage !== undefined) setCurrentPdfPage(extra.pdfPage)
+      if (extra?.cbzPage !== undefined) setCurrentCbzPage(extra.cbzPage)
       // Use ref to avoid stale closure — prevents saving progress for
       // the wrong book when the user switches books quickly.
       const bookId = bookIdRef.current
@@ -161,6 +164,7 @@ export function Reader() {
         cfi: extra?.cfi,
         textPosition: extra?.textPosition,
         pdfPage: extra?.pdfPage,
+        cbzPage: extra?.cbzPage,
         audioTrack: extra?.audioTrack,
         audioTime: extra?.audioTime,
       }).catch((e) => logger.error('Progress save failed', e))
@@ -197,32 +201,40 @@ export function Reader() {
   // Global keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       // Don't hijack keys while a dialog/sheet (search, settings, TOC) is open
       if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
-      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
-        e.preventDefault()
-        // Audio books have no full-text search — the toolbar button is
-        // hidden for mp3, so the shortcut must not open an empty dialog.
-        if (bookFormatRef.current !== 'mp3') setSearchOpen(true)
-      } else if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-        e.preventDefault()
-        // Dispatch a custom event so any reader can add a bookmark at current position
-        window.dispatchEvent(new CustomEvent('reader:add-bookmark'))
-        setBookmarksOpen(true)
-        setActiveTab('bookmarks')
-      } else if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
-        e.preventDefault()
-        const { settings, updateSettings } = useReaderStore.getState()
-        updateSettings({ fontSize: Math.min(28, settings.fontSize + 1) })
-      } else if ((e.metaKey || e.ctrlKey) && (e.key === '-' || e.key === '_')) {
-        e.preventDefault()
-        const { settings, updateSettings } = useReaderStore.getState()
-        updateSettings({ fontSize: Math.max(12, settings.fontSize - 1) })
-      } else if ((e.metaKey || e.ctrlKey) && e.key === '0') {
-        e.preventDefault()
-        useReaderStore.getState().updateSettings({ fontSize: 18 })
-      } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
+      // Ctrl/⌘-shortcuts must keep working even when focus is in an input
+      // (e.g. the PDF page-number box) — otherwise Ctrl+F opens the browser
+      // find instead of the app search.
+      if (e.metaKey || e.ctrlKey) {
+        if (e.key === 'f') {
+          e.preventDefault()
+          // Audio books have no full-text search — the toolbar button is
+          // hidden for mp3, so the shortcut must not open an empty dialog.
+          if (bookFormatRef.current !== 'mp3') setSearchOpen(true)
+        } else if (e.key === 'b') {
+          e.preventDefault()
+          // Dispatch a custom event so any reader can add a bookmark at current position
+          window.dispatchEvent(new CustomEvent('reader:add-bookmark'))
+          setBookmarksOpen(true)
+          setActiveTab('bookmarks')
+        } else if (e.key === '=' || e.key === '+') {
+          e.preventDefault()
+          const { settings, updateSettings } = useReaderStore.getState()
+          updateSettings({ fontSize: Math.min(28, settings.fontSize + 1) })
+        } else if (e.key === '-' || e.key === '_') {
+          e.preventDefault()
+          const { settings, updateSettings } = useReaderStore.getState()
+          updateSettings({ fontSize: Math.max(12, settings.fontSize - 1) })
+        } else if (e.key === '0') {
+          e.preventDefault()
+          useReaderStore.getState().updateSettings({ fontSize: 18 })
+        }
+        return
+      }
+      // Non-modified keys must not fire while typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'f') {
         toggleFullscreen()
       } else if (e.key === '?') {
         setHelpOpen(true)
@@ -245,6 +257,7 @@ export function Reader() {
         cfi: currentCfi ?? book.cfi,
         textPosition: currentTextPosition ?? book.textPosition,
         pdfPage: currentPdfPage ?? book.pdfPage,
+        cbzPage: currentCbzPage ?? book.cbzPage,
         label: `Закладка ${marks.length + 1} · ${new Date().toLocaleString('ru-RU', {
           day: 'numeric',
           month: 'short',
@@ -501,6 +514,7 @@ export function Reader() {
             currentCfi={currentCfi}
             currentTextPosition={currentTextPosition}
             currentPdfPage={currentPdfPage}
+            currentCbzPage={currentCbzPage}
             onNavigate={() => setBookmarksOpen(false)}
           />
         </SheetContent>

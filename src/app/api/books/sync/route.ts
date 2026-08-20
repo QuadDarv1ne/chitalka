@@ -60,6 +60,12 @@ export async function POST(req: Request) {
         format: typeof raw.format === 'string' ? raw.format.slice(0, 20) : 'unknown',
         progress: Math.max(0, Math.min(1, Number(raw.progress) || 0)),
         lastOpenedAt,
+        cfi: typeof raw.cfi === 'string' ? raw.cfi.slice(0, 2000) : undefined,
+        textPosition: typeof raw.textPosition === 'number' ? raw.textPosition : undefined,
+        pdfPage: typeof raw.pdfPage === 'number' ? raw.pdfPage : undefined,
+        cbzPage: typeof raw.cbzPage === 'number' ? raw.cbzPage : undefined,
+        audioTrack: typeof raw.audioTrack === 'number' ? raw.audioTrack : undefined,
+        audioTime: typeof raw.audioTime === 'number' ? raw.audioTime : undefined,
       }
 
       // upsert is race-safe (concurrent syncs from two devices cannot
@@ -120,6 +126,12 @@ export async function GET() {
         format: b.format,
         progress: b.progress,
         lastOpenedAt: b.lastOpenedAt,
+        cfi: b.cfi,
+        textPosition: b.textPosition,
+        pdfPage: b.pdfPage,
+        cbzPage: b.cbzPage,
+        audioTrack: b.audioTrack,
+        audioTime: b.audioTime,
         updatedAt: b.updatedAt,
       })),
     })

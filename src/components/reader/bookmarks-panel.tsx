@@ -11,10 +11,11 @@ interface Props {
   currentCfi?: string
   currentTextPosition?: number
   currentPdfPage?: number
+  currentCbzPage?: number
   onNavigate: () => void
 }
 
-export function BookmarksPanel({ book, currentCfi, currentTextPosition, currentPdfPage, onNavigate }: Props) {
+export function BookmarksPanel({ book, currentCfi, currentTextPosition, currentPdfPage, currentCbzPage, onNavigate }: Props) {
   const bookmarks = useReaderStore((s) => s.bookmarks)
   const addBookmark = useReaderStore((s) => s.addBookmark)
   const removeBookmark = useReaderStore((s) => s.removeBookmark)
@@ -27,6 +28,7 @@ export function BookmarksPanel({ book, currentCfi, currentTextPosition, currentP
       cfi: currentCfi ?? book.cfi,
       textPosition: currentTextPosition ?? book.textPosition,
       pdfPage: currentPdfPage ?? book.pdfPage,
+      cbzPage: currentCbzPage ?? book.cbzPage,
       label: `Закладка ${bookMarks.length + 1} · ${new Date().toLocaleString('ru-RU', {
         day: 'numeric',
         month: 'short',
@@ -42,6 +44,10 @@ export function BookmarksPanel({ book, currentCfi, currentTextPosition, currentP
     } else if (book.format === 'pdf' && mark.pdfPage) {
       window.dispatchEvent(
         new CustomEvent('pdf-goto-page', { detail: mark.pdfPage }),
+      )
+    } else if (book.format === 'cbz' && mark.cbzPage !== undefined) {
+      window.dispatchEvent(
+        new CustomEvent('cbz-goto-page', { detail: mark.cbzPage }),
       )
     } else if (mark.textPosition !== undefined) {
       window.dispatchEvent(
@@ -88,6 +94,11 @@ export function BookmarksPanel({ book, currentCfi, currentTextPosition, currentP
                       {mark.pdfPage !== undefined && (
                         <p className="text-xs text-muted-foreground mt-0.5">
                           Страница {mark.pdfPage}
+                        </p>
+                      )}
+                      {mark.cbzPage !== undefined && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Страница {mark.cbzPage + 1}
                         </p>
                       )}
                       {mark.textPosition !== undefined && (

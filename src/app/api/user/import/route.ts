@@ -64,6 +64,12 @@ export async function POST(req: Request) {
           format,
           progress,
           lastOpenedAt,
+          cfi: typeof book.cfi === 'string' ? book.cfi.slice(0, 2000) : undefined,
+          textPosition: typeof book.textPosition === 'number' ? book.textPosition : undefined,
+          pdfPage: typeof book.pdfPage === 'number' ? book.pdfPage : undefined,
+          cbzPage: typeof book.cbzPage === 'number' ? book.cbzPage : undefined,
+          audioTrack: typeof book.audioTrack === 'number' ? book.audioTrack : undefined,
+          audioTime: typeof book.audioTime === 'number' ? book.audioTime : undefined,
         },
         create: {
           userId: user.id,
@@ -73,6 +79,12 @@ export async function POST(req: Request) {
           format,
           progress,
           lastOpenedAt,
+          cfi: typeof book.cfi === 'string' ? book.cfi.slice(0, 2000) : undefined,
+          textPosition: typeof book.textPosition === 'number' ? book.textPosition : undefined,
+          pdfPage: typeof book.pdfPage === 'number' ? book.pdfPage : undefined,
+          cbzPage: typeof book.cbzPage === 'number' ? book.cbzPage : undefined,
+          audioTrack: typeof book.audioTrack === 'number' ? book.audioTrack : undefined,
+          audioTime: typeof book.audioTime === 'number' ? book.audioTime : undefined,
         },
       })
       imported++

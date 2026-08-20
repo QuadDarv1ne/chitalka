@@ -17,6 +17,7 @@ export interface BookRecord {
   cfi?: string // EPUB CFI position
   textPosition?: number // char offset for txt
   pdfPage?: number // PDF page number
+  cbzPage?: number // CBZ page index (0-based)
   audioTrack?: number // MP3 track index (0-based) for audiobooks
   audioTime?: number // seconds played within current track for audiobooks
   description?: string

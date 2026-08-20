@@ -10,7 +10,7 @@ import { useReadingTracker } from '@/hooks/use-reading-tracker'
 
 interface Props {
   book: BookRecord
-  onProgress: (p: number, extra?: { cfi?: string; textPosition?: number; pdfPage?: number; audioTrack?: number; audioTime?: number; pageIndex?: number }) => void
+  onProgress: (p: number, extra?: { cbzPage?: number }) => void
 }
 
 export function CbzReader({ book, onProgress }: Props) {
@@ -42,8 +42,11 @@ export function CbzReader({ book, onProgress }: Props) {
         })
 
         setImages(urls)
-        // Restore position
-        setCurrentIndex(0)
+        // Restore position — clamp so a stale/edited CBZ can't leave the
+        // reader on a nonexistent page.
+        const restore = Math.min(Math.max(book.cbzPage ?? 0, 0), Math.max(urls.length - 1, 0))
+        setCurrentIndex(restore)
+        prevIndexRef.current = restore
       } catch (e) {
         logger.error('CBZ extraction failed', e)
       } finally {
@@ -64,9 +67,12 @@ export function CbzReader({ book, onProgress }: Props) {
       setPagesFlipped((n) => n + 1)
       
       // Update progress
-      if (images.length > 0) {
+      if (images.length > 1) {
         const progress = currentIndex / (images.length - 1)
-        onProgressRef.current(progress, { pageIndex: currentIndex })
+        onProgressRef.current(progress, { cbzPage: currentIndex })
+      } else {
+        // Single-image book: progress is always 1 (fully read)
+        onProgressRef.current(1, { cbzPage: currentIndex })
       }
     } else {
       prevIndexRef.current = currentIndex
@@ -88,16 +94,40 @@ export function CbzReader({ book, onProgress }: Props) {
     }
   }, [currentIndex, images.length])
 
-  // Keyboard navigation
+  // Keyboard navigation — guards match the other readers: skip dialogs and
+  // focused buttons (otherwise Space on a focused nav button flips twice),
+  // and preventDefault so Space/PageDown don't scroll the page.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.key === 'ArrowLeft' || e.key === 'PageUp') prev()
-      else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') next()
+      if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return
+      if ((e.key === ' ' || e.key === 'PageDown' || e.key === 'PageUp') &&
+        e.target instanceof Element && e.target.closest('button, a')) return
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        if (e.key === 'PageUp') e.preventDefault()
+        prev()
+      } else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        if (e.key === ' ' || e.key === 'PageDown') e.preventDefault()
+        next()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [prev, next])
+
+  // Bookmark navigation — jump to a specific CBZ page
+  useEffect(() => {
+    const onGotoPage = (e: Event) => {
+      const p = (e as CustomEvent<number>).detail
+      if (typeof p === 'number') {
+        setCurrentIndex(Math.max(0, Math.min(p, images.length - 1)))
+      }
+    }
+    window.addEventListener('cbz-goto-page', onGotoPage)
+    return () => {
+      window.removeEventListener('cbz-goto-page', onGotoPage)
+    }
+  }, [images.length])
 
   if (loading) {
     return (
