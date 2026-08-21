@@ -138,14 +138,16 @@ export function HighlightsPanel({ book, onNavigate }: Props) {
                         </p>
                       )}
                       {h.textPosition !== undefined && (
-                        <FileText className="h-3 w-3" />
-                        {new Date(h.createdAt).toLocaleString('ru-RU', {
-                          day: 'numeric',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </div>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                          <FileText className="h-3 w-3" />
+                          {new Date(h.createdAt).toLocaleString('ru-RU', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </div>
+                      )}
                     </button>
                     <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button

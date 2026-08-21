@@ -66,6 +66,8 @@ export async function POST(req: Request) {
         cbzPage: typeof raw.cbzPage === 'number' ? raw.cbzPage : undefined,
         audioTrack: typeof raw.audioTrack === 'number' ? raw.audioTrack : undefined,
         audioTime: typeof raw.audioTime === 'number' ? raw.audioTime : undefined,
+        rating: typeof raw.rating === 'number' ? Math.max(1, Math.min(5, raw.rating)) : undefined,
+        favorite: typeof raw.favorite === 'boolean' ? raw.favorite : undefined,
       }
 
       // upsert is race-safe (concurrent syncs from two devices cannot
@@ -132,6 +134,8 @@ export async function GET() {
         cbzPage: b.cbzPage,
         audioTrack: b.audioTrack,
         audioTime: b.audioTime,
+        rating: b.rating,
+        favorite: b.favorite,
         updatedAt: b.updatedAt,
       })),
     })

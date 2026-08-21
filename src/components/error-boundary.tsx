@@ -3,6 +3,8 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
+import { logger } from '@/lib/logger'
+import { useReaderStore } from '@/store/reader-store'
 
 interface Props {
   children: ReactNode
@@ -28,13 +30,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // Log to stderr in dev so it shows in the terminal; in production
-    // we could send to a monitoring service, but this project has no
-    // external telemetry — just log locally.
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('ErrorBoundary caught:', error)
-      console.error('Component stack:', info.componentStack)
-    }
+    // Log to structured logger so it goes to stderr in dev and can be
+    // ingested by a monitoring service in production.
+    logger.error('ErrorBoundary caught', error, info.componentStack)
   }
 
   handleReset = () => {
@@ -77,7 +75,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </Button>
             <Button
               variant="outline"
-              onClick={() => (window.location.href = '/')}
+              onClick={() => useReaderStore.getState().setView('library')}
               className="gap-2"
             >
               <Home className="h-4 w-4" />

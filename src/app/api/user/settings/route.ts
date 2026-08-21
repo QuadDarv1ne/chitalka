@@ -38,6 +38,7 @@ export async function GET() {
         margin: settings.margin,
         textAlign: settings.textAlign,
         hyphens: settings.hyphens,
+        twoPage: settings.twoPage,
         ttsRate: settings.ttsRate,
         ttsVoice: settings.ttsVoice,
         dailyGoalMinutes: settings.dailyGoalMinutes,
@@ -62,12 +63,12 @@ export async function PUT(req: Request) {
 
     const body = await readJsonBody<{
       theme?: unknown, fontFamily?: unknown, fontSize?: unknown, lineHeight?: unknown, margin?: unknown,
-      textAlign?: unknown, hyphens?: unknown, ttsRate?: unknown, ttsVoice?: unknown, dailyGoalMinutes?: unknown,
+      textAlign?: unknown, hyphens?: unknown, twoPage?: unknown, ttsRate?: unknown, ttsVoice?: unknown, dailyGoalMinutes?: unknown,
       readingSpeed?: unknown,
     }>(req, 64 * 1024)
     const {
       theme, fontFamily, fontSize, lineHeight, margin,
-      textAlign, hyphens, ttsRate, ttsVoice, dailyGoalMinutes, readingSpeed,
+      textAlign, hyphens, twoPage, ttsRate, ttsVoice, dailyGoalMinutes, readingSpeed,
     } = body ?? {}
 
     // Validate
@@ -117,6 +118,12 @@ export async function PUT(req: Request) {
       }
       data.hyphens = hyphens
     }
+    if (twoPage !== undefined) {
+      if (typeof twoPage !== 'boolean') {
+        return NextResponse.json({ error: 'twoPage: true/false' }, { status: 400 })
+      }
+      data.twoPage = twoPage
+    }
     if (ttsRate !== undefined) {
       const n = Number(ttsRate)
       if (!Number.isFinite(n) || n < 0.5 || n > 2.0) {
@@ -156,6 +163,7 @@ return NextResponse.json({
         margin: updated.margin,
         textAlign: updated.textAlign,
         hyphens: updated.hyphens,
+        twoPage: updated.twoPage,
         ttsRate: updated.ttsRate,
         ttsVoice: updated.ttsVoice,
         dailyGoalMinutes: updated.dailyGoalMinutes,

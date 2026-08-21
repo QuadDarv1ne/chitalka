@@ -23,6 +23,8 @@ export function bookToSyncPayload(b: BookRecord) {
     cbzPage: b.cbzPage,
     audioTrack: b.audioTrack,
     audioTime: b.audioTime,
+    rating: b.rating,
+    favorite: b.favorite,
   }
 }
 
@@ -42,6 +44,8 @@ export interface SyncBook {
   cbzPage: number | null
   audioTrack: number | null
   audioTime: number | null
+  rating: number | null
+  favorite: boolean | null
   updatedAt: number
 }
 
@@ -118,6 +122,8 @@ export async function syncBooksFromServer(): Promise<{ updated: number; localOnl
           cbzPage: sb.cbzPage ?? undefined,
           audioTrack: sb.audioTrack ?? undefined,
           audioTime: sb.audioTime ?? undefined,
+          rating: sb.rating ?? undefined,
+          favorite: sb.favorite ?? undefined,
         })
         updated++
       } else {

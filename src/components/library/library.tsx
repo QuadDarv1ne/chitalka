@@ -142,12 +142,6 @@ export function Library() {
   const userId = user?.id ?? null
   const restoreInput = useRef<HTMLInputElement>(null)
 
-  // Sync book progress to server (when user is verified)
-  useBookSync(books)
-
-  // Pull server-side book metadata into local IndexedDB
-  useServerBookSync(refresh)
-
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
@@ -160,6 +154,12 @@ export function Library() {
       setLoading(false)
     }
   }, [userId])
+
+  // Sync book progress to server (when user is verified)
+  useBookSync(books)
+
+  // Pull server-side book metadata into local IndexedDB
+  useServerBookSync(refresh)
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -633,7 +633,7 @@ export function Library() {
                 <DropdownMenuItem onClick={() => setFormatFilter('all')}>
                   Все форматы
                 </DropdownMenuItem>
-                {(['epub', 'pdf', 'fb2', 'txt', 'md', 'html', 'mp3'] as FormatFilter[]).map((f) => (
+                {(['epub', 'pdf', 'fb2', 'txt', 'md', 'html', 'mp3', 'cbz'] as FormatFilter[]).map((f) => (
                   <DropdownMenuItem key={f} onClick={() => setFormatFilter(f)}>
                     {f.toUpperCase()} {formatCounts[f] ? `(${formatCounts[f]})` : ''}
                   </DropdownMenuItem>
@@ -704,7 +704,7 @@ export function Library() {
             <input
               ref={fileInput}
               type="file"
-              accept=".epub,.pdf,.fb2,.txt,.md,.html,.htm,.mp3,.mp3.zip"
+              accept=".epub,.pdf,.fb2,.txt,.md,.html,.htm,.mp3,.mp3.zip,.cbz"
               multiple
               className="hidden"
               onChange={(e) => {

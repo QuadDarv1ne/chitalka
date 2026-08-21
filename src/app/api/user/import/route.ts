@@ -5,7 +5,7 @@ import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/session'
 import { readJsonBody, toDate } from '@/lib/http'
 
-const VALID_FORMATS = ['epub', 'fb2', 'pdf', 'txt', 'md', 'html', 'mp3']
+const VALID_FORMATS = ['epub', 'fb2', 'pdf', 'txt', 'md', 'html', 'mp3', 'cbz']
 const VALID_THEMES = ['light', 'dark', 'sepia', 'contrast']
 const VALID_FONTS = ['serif', 'sans', 'mono']
 const VALID_ALIGN = ['left', 'justify']
@@ -70,6 +70,8 @@ export async function POST(req: Request) {
           cbzPage: typeof book.cbzPage === 'number' ? book.cbzPage : undefined,
           audioTrack: typeof book.audioTrack === 'number' ? book.audioTrack : undefined,
           audioTime: typeof book.audioTime === 'number' ? book.audioTime : undefined,
+          rating: typeof book.rating === 'number' ? Math.max(1, Math.min(5, book.rating)) : undefined,
+          favorite: typeof book.favorite === 'boolean' ? book.favorite : undefined,
         },
         create: {
           userId: user.id,
@@ -85,6 +87,8 @@ export async function POST(req: Request) {
           cbzPage: typeof book.cbzPage === 'number' ? book.cbzPage : undefined,
           audioTrack: typeof book.audioTrack === 'number' ? book.audioTrack : undefined,
           audioTime: typeof book.audioTime === 'number' ? book.audioTime : undefined,
+          rating: typeof book.rating === 'number' ? Math.max(1, Math.min(5, book.rating)) : undefined,
+          favorite: typeof book.favorite === 'boolean' ? book.favorite : undefined,
         },
       })
       imported++
@@ -101,6 +105,7 @@ export async function POST(req: Request) {
       if (Number.isFinite(Number(s.margin))) settingsData.margin = clampNumber(s.margin, 1, 6, 3)
       if (typeof s.textAlign === 'string' && VALID_ALIGN.includes(s.textAlign)) settingsData.textAlign = s.textAlign
       if (typeof s.hyphens === 'boolean') settingsData.hyphens = s.hyphens
+      if (typeof s.twoPage === 'boolean') settingsData.twoPage = s.twoPage
       if (Number.isFinite(Number(s.ttsRate))) settingsData.ttsRate = clampNumber(s.ttsRate, 0.5, 2, 1)
       if (s.ttsVoice === null || typeof s.ttsVoice === 'string') settingsData.ttsVoice = s.ttsVoice
       if (Number.isFinite(Number(s.dailyGoalMinutes))) settingsData.dailyGoalMinutes = clampNumber(s.dailyGoalMinutes, 5, 240, 30)

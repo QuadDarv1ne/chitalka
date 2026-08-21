@@ -116,7 +116,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
         // saved progress on open. Generation is heavy for huge books, so a
         // failure only degrades the percentage, never the CFI restore.
         try {
-          await epubBook.locations.generate()
+          await epubBook.locations.generate(10000)
         } catch (e) {
           logger.warn('EPUB: locations.generate failed, % progress will be unreliable', e)
         }
@@ -300,7 +300,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
     const rendition = renditionRef.current
     if (!book || !rendition) return ''
     try {
-      const loc = rendition.currentLocation()
+      const loc = rendition.currentLocation() as any
       // currentLocation() returns { start, end, atStart, atEnd } — the CFI
       // lives on start/end, not on the top level.
       const cfi = loc?.start?.cfi || loc?.end?.cfi

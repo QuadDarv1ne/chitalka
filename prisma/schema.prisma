@@ -35,6 +35,7 @@ model UserSettings {
   margin       Int      @default(3)
   textAlign    String   @default("justify")
   hyphens      Boolean  @default(true)
+  twoPage      Boolean  @default(false)
   ttsRate      Float    @default(1.0)
   ttsVoice     String?
   dailyGoalMinutes Int  @default(30)
@@ -94,6 +95,8 @@ model BookMeta {
   cbzPage      Int?     // CBZ page index (0-based)
   audioTrack   Int?     // MP3 track index (0-based)
   audioTime    Float?   // seconds played within current track
+  rating       Int?     // 1-5 stars
+  favorite     Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
