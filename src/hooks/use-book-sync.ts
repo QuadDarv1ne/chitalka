@@ -105,11 +105,11 @@ export async function syncBooksFromServer(): Promise<{ updated: number; localOnl
       }
 
       // Compare updatedAt timestamps: only apply server data if it's newer
-      // than the local record's last modification. We use local addedAt as a
-      // proxy for "last meaningful write" since we don't track per-field
-      // timestamps. If the server has a more recent updatedAt, its version
-      // of progress/position is fresher.
-      const serverTime = sb.updatedAt
+      // than the local record's last write. updatedAt arrives as an ISO
+      // string from the API (Prisma serialises Date → string), so parse it.
+      const serverTime = typeof sb.updatedAt === 'string'
+        ? new Date(sb.updatedAt).getTime()
+        : sb.updatedAt
       const localTime = local.lastOpenedAt ?? local.addedAt
 
       if (serverTime > localTime) {

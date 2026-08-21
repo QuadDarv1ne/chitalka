@@ -19,6 +19,7 @@ export function CbzReader({ book, onProgress }: Props) {
   const [pagesFlipped, setPagesFlipped] = useState(0)
   const onProgressRef = useRef(onProgress)
   const prevIndexRef = useRef(-1)
+  const initializedRef = useRef(false)
   const [loading, setLoading] = useState(() => true)
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export function CbzReader({ book, onProgress }: Props) {
         const restore = Math.min(Math.max(book.cbzPage ?? 0, 0), Math.max(urls.length - 1, 0))
         setCurrentIndex(restore)
         prevIndexRef.current = restore
+        initializedRef.current = false
       } catch (e) {
         logger.error('CBZ extraction failed', e)
       } finally {
@@ -60,22 +62,22 @@ export function CbzReader({ book, onProgress }: Props) {
     }
   }, [book.id, book.blob])
 
-  // Track page turns
+  // Track page turns and save progress
   useEffect(() => {
-    if (prevIndexRef.current !== currentIndex && prevIndexRef.current !== -1) {
+    if (!initializedRef.current) {
+      initializedRef.current = true
+      prevIndexRef.current = currentIndex
+      return
+    }
+    if (prevIndexRef.current !== currentIndex) {
       prevIndexRef.current = currentIndex
       setPagesFlipped((n) => n + 1)
-      
-      // Update progress
       if (images.length > 1) {
         const progress = currentIndex / (images.length - 1)
         onProgressRef.current(progress, { cbzPage: currentIndex })
       } else {
-        // Single-image book: progress is always 1 (fully read)
         onProgressRef.current(1, { cbzPage: currentIndex })
       }
-    } else {
-      prevIndexRef.current = currentIndex
     }
   }, [currentIndex, images.length])
 
