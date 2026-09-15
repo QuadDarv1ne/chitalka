@@ -92,7 +92,7 @@ import { CollectionImport } from './collection-import'
 import { UrlImportDialog } from './url-import'
 
 type SortKey = 'recent' | 'title' | 'added' | 'progress' | 'rating'
-type FormatFilter = 'all' | 'epub' | 'pdf' | 'txt' | 'md' | 'fb2' | 'html' | 'mp3'
+type FormatFilter = 'all' | 'epub' | 'pdf' | 'txt' | 'md' | 'fb2' | 'html' | 'mp3' | 'cbz'
 type StatusFilter = 'all' | 'reading' | 'finished'
 type FavoriteFilter = 'all' | 'favorites'
 
@@ -647,7 +647,7 @@ export function Library() {
                   <Heart className="h-4 w-4 mr-2" /> Избранные
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel>Формат</DropdownMenuLabel>
+                <DropdownMenuLabel>Статус</DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => setStatusFilter('all')}>
                   Все книги
                 </DropdownMenuItem>
