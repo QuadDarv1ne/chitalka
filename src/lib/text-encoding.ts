@@ -37,13 +37,64 @@ export function decodeTextBytes(buf: ArrayBuffer): string {
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   } catch {
-    // Not valid UTF-8 — the common case for Russian legacy files is cp1251
-    try {
-      return new TextDecoder('windows-1251').decode(bytes)
-    } catch {
-      return new TextDecoder('utf-8').decode(bytes)
+    // Not valid UTF-8: a Russian legacy file is either windows-1251 or KOI8-R,
+    // and both decode every byte, so no exception tells them apart.
+    const cp1251 = tryDecode('windows-1251', bytes)
+    const koi8 = tryDecode('koi8-r', bytes)
+    if (cp1251 === null) return koi8 ?? new TextDecoder('utf-8').decode(bytes)
+    if (koi8 === null) return cp1251
+    return cyrillicScore(koi8) > cyrillicScore(cp1251) ? koi8 : cp1251
+  }
+}
+
+function tryDecode(label: string, bytes: Uint8Array): string | null {
+  try {
+    return new TextDecoder(label).decode(bytes)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * How much a decoded text looks like Russian prose.
+ *
+ * KOI8-R orders the alphabet and puts lowercase in 0xC0-0xDF while windows-1251
+ * puts uppercase there, so decoding one as the other turns body text — which is
+ * about three quarters lowercase — into a wall of capitals. The lowercase share
+ * of the Cyrillic letters therefore identifies the right code page far better
+ * than any "invalid byte" check could.
+ */
+function cyrillicScore(text: string): number {
+  let letters = 0
+  let lowercase = 0
+  let rare = 0
+  const limit = Math.min(text.length, 20_000)
+
+  for (let i = 0; i < limit; i++) {
+    const c = text.charCodeAt(i)
+    if (c >= 0x0430 && c <= 0x044f) {
+      // а-я
+      letters++
+      lowercase++
+    } else if (c >= 0x0410 && c <= 0x042f) {
+      // А-Я
+      letters++
+    } else if (c === 0x0451) {
+      // ё
+      letters++
+      lowercase++
+    } else if (c === 0x0401) {
+      // Ё
+      letters++
+    } else if ((c >= 0x2500 && c <= 0x257f) || (c >= 0x0400 && c <= 0x040f)) {
+      // Box drawing and Ukrainian/Bulgarian extras: what KOI8-R punctuation
+      // bytes turn into when they are read as windows-1251.
+      rare++
     }
   }
+
+  if (letters === 0) return -1
+  return (lowercase / letters) * 100 - rare
 }
 
 /**

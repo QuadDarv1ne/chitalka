@@ -257,7 +257,7 @@ export function Library() {
                 meta = await parseFb2Meta(file)
                 blob = dedupeBlob
               } else if (format === 'mp3') {
-                meta = parseAudioMeta(file.name)
+                meta = await parseAudioMeta(file)
               } else {
                 meta = await parseTextMeta(file, format)
               }

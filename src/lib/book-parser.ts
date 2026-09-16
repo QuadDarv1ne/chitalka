@@ -1,9 +1,15 @@
 'use client'
 
 import type { BookRecord } from '@/lib/library'
-import { initPdfWorker } from '@/lib/pdf-worker'
+import { initPdfWorker, pdfAssetOptions } from '@/lib/pdf-worker'
 import { decodeTextBytes } from '@/lib/text-encoding'
-import { unzip } from '@/lib/zip-utils'
+import { readFirstEntryHead, unzip } from '@/lib/zip-utils'
+import {
+  mergeAudioTags,
+  parseId3v1,
+  parseId3v2,
+  type AudioTags,
+} from '@/lib/id3'
 import { logger } from '@/lib/logger'
 
 export interface ParsedBook {
@@ -180,12 +186,110 @@ function blobToDataURL(blob: Blob): Promise<string> {
   })
 }
 
+const XML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: '\u00a0',
+}
+
+function decodeXmlEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => codePointSafe(Number.parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => codePointSafe(Number.parseInt(dec, 10)))
+    .replace(/&([a-z]+);/gi, (match, name: string) => XML_ENTITIES[name.toLowerCase()] ?? match)
+}
+
+function codePointSafe(code: number): string {
+  if (!Number.isFinite(code) || code <= 0 || code > 0x10ffff) return ''
+  try {
+    return String.fromCodePoint(code)
+  } catch {
+    return ''
+  }
+}
+
+function cleanXmlFragment(fragment: string, limit: number): string {
+  return decodeXmlEntities(
+    fragment.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]*>/g, ' '),
+  )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, limit)
+}
+
+/**
+ * Recover FB2 metadata by scanning the source text.
+ *
+ * Used when DOMParser reports the document as malformed: one unescaped
+ * ampersand or a stray "</b>" inside an annotation is enough to make the whole
+ * file invalid XML, and such files are common in Russian libraries. The fields
+ * we need are still plainly readable.
+ */
+function scanFb2Meta(text: string): Partial<ParsedBook> {
+  const out: Partial<ParsedBook> = {}
+
+  const title = text.match(/<book-title[^>]*>([\s\S]{0,600}?)<\/book-title>/i)?.[1]
+  if (title) {
+    const value = cleanXmlFragment(title, 300)
+    if (value) out.title = value
+  }
+
+  const authorBlock = text.match(/<author[^>]*>([\s\S]{0,2000}?)<\/author>/i)?.[1]
+  if (authorBlock) {
+    const part = (re: RegExp) => cleanXmlFragment(authorBlock.match(re)?.[1] ?? '', 100)
+    const parts = [
+      part(/<last-name[^>]*>([\s\S]{0,200}?)<\/last-name>/i),
+      part(/<first-name[^>]*>([\s\S]{0,200}?)<\/first-name>/i),
+      part(/<middle-name[^>]*>([\s\S]{0,200}?)<\/middle-name>/i),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+    const value = parts || cleanXmlFragment(authorBlock, 120)
+    if (value) out.author = value
+  }
+
+  const annotation = text.match(/<annotation[^>]*>([\s\S]{0,6000}?)<\/annotation>/i)?.[1]
+  if (annotation) {
+    const value = cleanXmlFragment(annotation, 500)
+    if (value) out.description = value
+  }
+
+  const coverHref = text.match(
+    /<coverpage[^>]*>[\s\S]{0,400}?<image[^>]*?(?:xlink:|l:)?href="[^"]*#([^"]+)"/i,
+  )?.[1]
+  if (coverHref) {
+    const cover = extractFb2Binary(text, coverHref)
+    if (cover) out.cover = cover
+  }
+
+  return out
+}
+
+/** Base64 payload of the <binary id="…"> element, as a data URL. */
+function extractFb2Binary(text: string, id: string): string | undefined {
+  const element = /<binary\b[^>]*>([\s\S]*?)<\/binary>/gi
+  let match: RegExpExecArray | null
+  while ((match = element.exec(text)) !== null) {
+    const tag = match[0].slice(0, match[0].indexOf('>') + 1)
+    if (tag.match(/\bid=["']([^"']+)["']/i)?.[1] !== id) continue
+    const contentType = tag.match(/\bcontent-type=["']([^"']+)["']/i)?.[1] ?? 'image/jpeg'
+    const data = match[1].replace(/\s/g, '')
+    if (data.length < 64) return undefined
+    return `data:${contentType};base64,${data}`
+  }
+  return undefined
+}
+
 /**
  * FB2 metadata parser. FB2 is XML; we extract title, author, annotation, cover binary.
  */
 export async function parseFb2Meta(file: File): Promise<ParsedBook> {
   const defaultResult: ParsedBook = {
-    title: file.name.replace(/\.fb2$/i, ''),
+    title: cleanBookFilename(file.name),
     author: 'Неизвестный автор',
     format: 'fb2',
   }
@@ -199,7 +303,13 @@ export async function parseFb2Meta(file: File): Promise<ParsedBook> {
 
     // Check for parse errors
     const parseError = doc.querySelector('parsererror')
-    if (parseError) return defaultResult
+    if (parseError) {
+      // A single unescaped ampersand makes the whole document invalid XML,
+      // which is common in files downloaded from Russian libraries. The
+      // metadata is still recoverable by scanning the source text.
+      logger.warn('FB2 is not well-formed XML — falling back to text scan')
+      return { ...defaultResult, ...scanFb2Meta(text), format: 'fb2' }
+    }
 
     const getTitle = () => {
       const t = doc.querySelector('book-title') || doc.querySelector('title-info > book-title')
@@ -368,12 +478,88 @@ export async function parseTextMeta(file: File, format: 'txt' | 'md' | 'html' | 
 }
 
 /**
+ * Turn a book filename into a human readable title.
+ * Library dumps use underscores as word separators and carry trailing format
+ * or catalogue markers (".a6", ".a4", "_1234567"), none of which belong in a
+ * title shown to the reader.
+ */
+export function cleanBookFilename(filename: string): string {
+  let name = filename
+  // Strip extension(s) such as .pdf, .mp3.zip, .fb2.zip
+  name = name.replace(/\.(pdf|epub|fb2|txt|md|html?|cbz|mp3)(\.zip)?$/i, '')
+  // Archive/library suffixes: ".a4", ".a6", " (1)", "_2"
+  name = name.replace(/\.[a-z]\d$/i, '')
+  name = name.replace(/\s*\((?:\d+|copy|копия)\)$/i, '')
+  // Long digit runs are catalogue ids, not part of a title
+  name = name.replace(/[_\s]\d{5,}\b/g, '')
+  name = name.replace(/_/g, ' ')
+  name = name.replace(/\s{2,}/g, ' ')
+  name = name.replace(/^[\s.\-–—]+|[\s.\-–—]+$/g, '')
+  return name.trim()
+}
+
+/**
+ * Sanitize a text value coming from a PDF info dictionary.
+ * Returns '' for values that carry no information (empty, placeholder, or the
+ * same string as the filename), because exporters routinely write the file
+ * name or the producing application into /Title.
+ */
+function sanitizePdfInfoValue(value: unknown, fallbackTitle: string): string {
+  if (value === undefined || value === null) return ''
+  const text = String(value)
+    .replace(/\u0000/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (text.length < 2) return ''
+  // Nothing but punctuation/digits
+  if (!/[\p{L}]/u.test(text)) return ''
+  const noise = /^(?:microsoft|adobe|acrobat|word|canva|latex|libreoffice|openoffice|wkhtmltopdf|mozilla|pdfjs|unknown|untitled|без названия)/i
+  if (noise.test(text)) return ''
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+  const candidate = norm(text)
+  const fallback = norm(fallbackTitle)
+  if (!candidate || !fallback) return text
+  // Identical to, or a substring of, the filename — no new information.
+  if (candidate === fallback || fallback.includes(candidate) || candidate.includes(fallback)) return ''
+  return text
+}
+
+/**
+ * Render page 1 as a cover image.
+ * Kept separate from metadata reading so that a rendering failure (missing
+ * font, oversized canvas, encrypted content) never costs the title.
+ */
+async function renderPdfCover(doc: PdfDocumentLike): Promise<string | undefined> {
+  const page = await doc.getPage(1)
+  const viewport = page.getViewport({ scale: 1.0 })
+  const canvas = document.createElement('canvas')
+  const maxThumbWidth = 400
+  const scale = Math.min(1, maxThumbWidth / viewport.width)
+  const scaledViewport = page.getViewport({ scale })
+  canvas.width = Math.max(1, Math.floor(scaledViewport.width))
+  canvas.height = Math.max(1, Math.floor(scaledViewport.height))
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return undefined
+  await page.render({ canvasContext: ctx, viewport: scaledViewport, canvas } as never).promise
+  // PNG keeps Cyrillic text crisp on scanned/text-heavy covers
+  return canvas.toDataURL('image/png', 0.92)
+}
+
+interface PdfDocumentLike {
+  getPage(n: number): Promise<{
+    getViewport(o: { scale: number }): { width: number; height: number }
+    render(o: unknown): { promise: Promise<void> }
+  }>
+}
+
+/**
  * PDF metadata parser using pdfjs-dist.
  * Extracts title from info dict, generates a cover from the first page.
  */
 export async function parsePdfMeta(file: File): Promise<ParsedBook> {
+  const fallbackTitle = cleanBookFilename(file.name)
   const defaultResult: ParsedBook = {
-    title: file.name.replace(/\.pdf$/i, ''),
+    title: fallbackTitle,
     author: 'Неизвестный автор',
     format: 'pdf',
   }
@@ -381,37 +567,39 @@ export async function parsePdfMeta(file: File): Promise<ParsedBook> {
     const pdfjs = await import('pdfjs-dist')
     await initPdfWorker()
     const data = await file.arrayBuffer()
-    const loadingTask = pdfjs.getDocument({ data })
-    const doc = await loadingTask.promise
-    let title = defaultResult.title
-    let author = defaultResult.author
+    const loadingTask = pdfjs.getDocument({ data, ...pdfAssetOptions() })
+    // Protected documents reject the very first request; asking for the
+    // password once keeps them readable instead of silently dropping them.
+    loadingTask.onPassword = (updatePassword: (p: string) => void, reason: number) => {
+      const incorrect =
+        (pdfjs as unknown as { PasswordResponses?: { PASSWORD_INCORRECT?: number } })
+          .PasswordResponses?.PASSWORD_INCORRECT
+      const message =
+        reason === incorrect
+          ? 'Пароль не подошёл. Попробуйте ещё раз:'
+          : 'Файл защищён паролем. Введите пароль:'
+      const password = window.prompt(message, '')
+      if (!password) throw new Error('Password required')
+      updatePassword(password)
+    }
     try {
-      const meta = await doc.getMetadata().catch(() => null)
-      if (meta?.info) {
-        const info = meta.info as any
-        if (info.Title) title = String(info.Title)
-        if (info.Author) author = String(info.Author)
-      }
-      // Render first page as cover
+      const doc = await loadingTask.promise
+      const info = await readPdfInfo(doc)
+
+      let title = defaultResult.title
+      let author = defaultResult.author
+      const infoTitle = sanitizePdfInfoValue(info.Title, fallbackTitle)
+      if (infoTitle) title = infoTitle
+      const infoAuthor = sanitizePdfInfoValue(info.Author, '')
+      if (infoAuthor) author = infoAuthor
+
       let cover: string | undefined
       try {
-        const page = await doc.getPage(1)
-        // Use a higher scale for better quality cover image
-        const viewport = page.getViewport({ scale: 1.0 })
-        const canvas = document.createElement('canvas')
-        // Scale down for thumbnail size but keep aspect ratio
-        const maxThumbWidth = 400
-        const scale = Math.min(1, maxThumbWidth / viewport.width)
-        const scaledViewport = page.getViewport({ scale })
-        canvas.width = scaledViewport.width
-        canvas.height = scaledViewport.height
-        const ctx = canvas.getContext('2d')!
-        await page.render({ canvasContext: ctx, viewport: scaledViewport, canvas } as any).promise
-        // Use PNG for better quality covers (especially text-heavy PDFs)
-        cover = canvas.toDataURL('image/png', 0.92)
+        cover = await renderPdfCover(doc)
       } catch (e) {
         logger.warn('PDF cover render failed', e)
       }
+
       return { title, author, cover, format: 'pdf' }
     } finally {
       await loadingTask.destroy().catch(() => {})
@@ -422,16 +610,29 @@ export async function parsePdfMeta(file: File): Promise<ParsedBook> {
   }
 }
 
+/** Read /Title and /Author, treating a failure as "no info" rather than an error. */
+async function readPdfInfo(
+  doc: unknown,
+): Promise<{ Title?: unknown; Author?: unknown }> {
+  try {
+    const meta = await (
+      doc as { getMetadata(): Promise<{ info?: Record<string, unknown> } | null> }
+    ).getMetadata()
+    return (meta?.info ?? {}) as { Title?: unknown; Author?: unknown }
+  } catch (e) {
+    logger.warn('PDF info read failed', e)
+    return {}
+  }
+}
+
 /**
- * Audio book metadata parser.
- * Extracts title/author from filename patterns like:
- *   "Author_Title.mp3.zip" or "Author_Title.mp3"
+ * Guess title and author from an audiobook filename such as
+ *   "Author_Title.mp3.zip" or "Author. Title.mp3"
+ * Used as a fallback when the file carries no ID3 tags.
  */
-export function parseAudioMeta(filename: string): ParsedBook {
+export function audioMetaFromFilename(filename: string): ParsedBook {
   // Strip extension(s)
   const base = filename.replace(/\.mp3\.zip$/i, '').replace(/\.mp3$/i, '')
-  // Common patterns: "Author_Title" or "Author. Title"
-  // Try splitting on first underscore, dot-space, or just underscore
   let author = 'Неизвестный автор'
   let title = base
 
@@ -449,11 +650,67 @@ export function parseAudioMeta(filename: string): ParsedBook {
     }
   }
 
-  // Clean up: decode transliteration hints, remove trailing dots
+  // Clean up: remove trailing dots
   title = title.replace(/\.$/, '').trim()
   author = author.replace(/\.$/, '').trim()
 
   return { title, author, format: 'mp3' }
+}
+
+/** Enough bytes to hold an ID3v2 tag with a front-cover picture. */
+const AUDIO_TAG_BYTES = 512 * 1024
+/** ID3v1 sits in the very last 128 bytes of a file. */
+const AUDIO_TAIL_BYTES = 256
+
+/**
+ * Audio book metadata parser.
+ * Reads the ID3 tags of the file — or of its first track when the audiobook is
+ * a ZIP of tracks — and falls back to the filename when there are no tags.
+ */
+export async function parseAudioMeta(file: File): Promise<ParsedBook> {
+  const fromName = audioMetaFromFilename(file.name)
+  try {
+    const tags = await readAudioTags(file)
+    return {
+      title: tags.title || fromName.title,
+      author: tags.author || fromName.author,
+      cover: tags.cover,
+      format: 'mp3',
+    }
+  } catch (e) {
+    logger.warn('Audio metadata parse failed', e)
+    return fromName
+  }
+}
+
+async function readAudioTags(file: File): Promise<AudioTags> {
+  try {
+    if (/\.zip$/i.test(file.name)) {
+      // Only the first track is needed, and only its head
+      const head = await readFirstEntryHead(
+        await file.arrayBuffer(),
+        (name: string) => /\.mp3$/i.test(name),
+        AUDIO_TAG_BYTES,
+      )
+      if (!head) return {}
+      const tags = parseId3v2(head.data)
+      // In a multi-track archive TIT2 names the chapter while TALB names the
+      // book; a single file has no such distinction.
+      if (head.matches > 1 && tags.album) return { ...tags, title: tags.album }
+      return tags
+    }
+
+    const head = new Uint8Array(await file.slice(0, AUDIO_TAG_BYTES).arrayBuffer())
+    const tags = parseId3v2(head)
+    if (tags.title && tags.author) return tags
+    const tail = new Uint8Array(
+      await file.slice(Math.max(0, file.size - AUDIO_TAIL_BYTES)).arrayBuffer(),
+    )
+    return mergeAudioTags(tags, parseId3v1(tail))
+  } catch (e) {
+    logger.warn('Audio tags read failed', e)
+    return {}
+  }
 }
 
 export interface AudioTrack {
