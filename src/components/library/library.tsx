@@ -370,7 +370,6 @@ export function Library() {
 
   const handleRestore = useCallback(
     async (files: FileList | null) => {
-      const file = files?.[0]
       if (!file) return
       try {
         const backup = await parseLibraryBackup(file)

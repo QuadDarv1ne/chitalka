@@ -184,7 +184,7 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
             meta = await parseFb2Meta(asFile)
             storeBlob = dedupeBlob
           } else if (format === 'mp3') {
-            meta = parseAudioMeta(file.name)
+            meta = await parseAudioMeta(asFile)
           } else {
             meta = await parseTextMeta(asFile, format as 'txt' | 'md' | 'html')
           }

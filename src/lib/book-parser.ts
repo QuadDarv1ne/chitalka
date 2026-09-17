@@ -10,6 +10,7 @@ import {
   parseId3v2,
   type AudioTags,
 } from '@/lib/id3'
+import { scanFb2Meta } from '@/lib/fb2-scan'
 import { logger } from '@/lib/logger'
 
 export interface ParsedBook {
@@ -184,104 +185,6 @@ function blobToDataURL(blob: Blob): Promise<string> {
     reader.onerror = reject
     reader.readAsDataURL(blob)
   })
-}
-
-const XML_ENTITIES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: '\u00a0',
-}
-
-function decodeXmlEntities(s: string): string {
-  return s
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => codePointSafe(Number.parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => codePointSafe(Number.parseInt(dec, 10)))
-    .replace(/&([a-z]+);/gi, (match, name: string) => XML_ENTITIES[name.toLowerCase()] ?? match)
-}
-
-function codePointSafe(code: number): string {
-  if (!Number.isFinite(code) || code <= 0 || code > 0x10ffff) return ''
-  try {
-    return String.fromCodePoint(code)
-  } catch {
-    return ''
-  }
-}
-
-function cleanXmlFragment(fragment: string, limit: number): string {
-  return decodeXmlEntities(
-    fragment.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]*>/g, ' '),
-  )
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, limit)
-}
-
-/**
- * Recover FB2 metadata by scanning the source text.
- *
- * Used when DOMParser reports the document as malformed: one unescaped
- * ampersand or a stray "</b>" inside an annotation is enough to make the whole
- * file invalid XML, and such files are common in Russian libraries. The fields
- * we need are still plainly readable.
- */
-function scanFb2Meta(text: string): Partial<ParsedBook> {
-  const out: Partial<ParsedBook> = {}
-
-  const title = text.match(/<book-title[^>]*>([\s\S]{0,600}?)<\/book-title>/i)?.[1]
-  if (title) {
-    const value = cleanXmlFragment(title, 300)
-    if (value) out.title = value
-  }
-
-  const authorBlock = text.match(/<author[^>]*>([\s\S]{0,2000}?)<\/author>/i)?.[1]
-  if (authorBlock) {
-    const part = (re: RegExp) => cleanXmlFragment(authorBlock.match(re)?.[1] ?? '', 100)
-    const parts = [
-      part(/<last-name[^>]*>([\s\S]{0,200}?)<\/last-name>/i),
-      part(/<first-name[^>]*>([\s\S]{0,200}?)<\/first-name>/i),
-      part(/<middle-name[^>]*>([\s\S]{0,200}?)<\/middle-name>/i),
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .trim()
-    const value = parts || cleanXmlFragment(authorBlock, 120)
-    if (value) out.author = value
-  }
-
-  const annotation = text.match(/<annotation[^>]*>([\s\S]{0,6000}?)<\/annotation>/i)?.[1]
-  if (annotation) {
-    const value = cleanXmlFragment(annotation, 500)
-    if (value) out.description = value
-  }
-
-  const coverHref = text.match(
-    /<coverpage[^>]*>[\s\S]{0,400}?<image[^>]*?(?:xlink:|l:)?href="[^"]*#([^"]+)"/i,
-  )?.[1]
-  if (coverHref) {
-    const cover = extractFb2Binary(text, coverHref)
-    if (cover) out.cover = cover
-  }
-
-  return out
-}
-
-/** Base64 payload of the <binary id="…"> element, as a data URL. */
-function extractFb2Binary(text: string, id: string): string | undefined {
-  const element = /<binary\b[^>]*>([\s\S]*?)<\/binary>/gi
-  let match: RegExpExecArray | null
-  while ((match = element.exec(text)) !== null) {
-    const tag = match[0].slice(0, match[0].indexOf('>') + 1)
-    if (tag.match(/\bid=["']([^"']+)["']/i)?.[1] !== id) continue
-    const contentType = tag.match(/\bcontent-type=["']([^"']+)["']/i)?.[1] ?? 'image/jpeg'
-    const data = match[1].replace(/\s/g, '')
-    if (data.length < 64) return undefined
-    return `data:${contentType};base64,${data}`
-  }
-  return undefined
 }
 
 /**
@@ -672,7 +575,8 @@ export async function parseAudioMeta(file: File): Promise<ParsedBook> {
   try {
     const tags = await readAudioTags(file)
     return {
-      title: tags.title || fromName.title,
+      // TALB (album) names the book, TIT2 names the track/chapter
+      title: tags.title || tags.album || fromName.title,
       author: tags.author || fromName.author,
       cover: tags.cover,
       format: 'mp3',
@@ -685,7 +589,13 @@ export async function parseAudioMeta(file: File): Promise<ParsedBook> {
 
 async function readAudioTags(file: File): Promise<AudioTags> {
   try {
-    if (/\.zip$/i.test(file.name)) {
+    // Sniffed rather than taken from the extension: a re-parse runs on a stored
+    // blob whose name we no longer know, and "audiobook.zip" and "book.mp3"
+    // are indistinguishable by name once the name is gone.
+    const head4 = new Uint8Array(await file.slice(0, 4).arrayBuffer())
+    const isZip = head4[0] === 0x50 && head4[1] === 0x4b && head4[2] === 0x03 && head4[3] === 0x04
+
+    if (isZip) {
       // Only the first track is needed, and only its head
       const head = await readFirstEntryHead(
         await file.arrayBuffer(),
