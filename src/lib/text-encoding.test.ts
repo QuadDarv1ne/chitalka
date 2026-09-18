@@ -21,7 +21,7 @@ function makeEncoder(label: string): (text: string) => Uint8Array {
 }
 
 const asBuf = (bytes: Uint8Array): ArrayBuffer =>
-  bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+  bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
 
 describe('decodeTextBytes', () => {
   it('decodes UTF-8 (with and without BOM)', () => {

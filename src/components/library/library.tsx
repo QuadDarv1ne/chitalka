@@ -1092,6 +1092,10 @@ const BookCard = memo(function BookCard({
           <img
             src={book.cover}
             alt={book.title}
+            // Covers are large data URLs; with hundreds of books the grid
+            // must not decode every image on mount.
+            loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover"
           />
         ) : (
@@ -1318,7 +1322,13 @@ function BookDetailsDialog({
           {/* Cover */}
           <div className="h-32 w-24 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
             {book.cover ? (
-              <img src={book.cover} alt={book.title} className="h-full w-full object-cover" />
+              <img
+                src={book.cover}
+                alt={book.title}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
                 <FileText className="h-10 w-10 text-muted-foreground/50" />
