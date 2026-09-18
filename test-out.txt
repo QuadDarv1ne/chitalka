@@ -8,20 +8,20 @@ Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
 
 [1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90mM:/GitHub/chitalk╨░[39m
 
- [32mтЬУ[39m src/lib/text-encoding.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 13[2mms[22m[39m
- [31mтЭп[39m src/lib/zip-utils.test.ts [2m([22m[2m6 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[32m 20[2mms[22m[39m
+ [32mтЬУ[39m src/lib/text-encoding.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [31mтЭп[39m src/lib/zip-utils.test.ts [2m([22m[2m6 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[32m 18[2mms[22m[39m
    [31mтЭп[39m unzip [2m(4)[22m
-[31m     [31m├Ч[31m extracts stored and deflated entries via the central directory[39m[32m 10[2mms[22m[39m
-[31m     [31m├Ч[31m recovers sizes from the central directory when local headers use data descriptors[39m[32m 1[2mms[22m[39m
-[31m     [31m├Ч[31m decodes UTF-8 entry names[39m[32m 3[2mms[22m[39m
+[31m     [31m├Ч[31m extracts stored and deflated entries via the central directory[39m[32m 9[2mms[22m[39m
+[31m     [31m├Ч[31m recovers sizes from the central directory when local headers use data descriptors[39m[32m 2[2mms[22m[39m
+[31m     [31m├Ч[31m decodes UTF-8 entry names[39m[32m 2[2mms[22m[39m
      [32mтЬУ[39m returns an empty map for non-ZIP data[32m 1[2mms[22m[39m
    [31mтЭп[39m readFirstEntryHead [2m(2)[22m
-[31m     [31m├Ч[31m reads the head of the first matching entry without decompressing the rest[39m[32m 3[2mms[22m[39m
-     [32mтЬУ[39m returns null when nothing matches[32m 0[2mms[22m[39m
- [32mтЬУ[39m src/lib/fb2-scan.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 10[2mms[22m[39m
- [32mтЬУ[39m src/lib/meta-status.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 6[2mms[22m[39m
- [32mтЬУ[39m src/lib/id3.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
- [32mтЬУ[39m src/lib/book-parser.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+[31m     [31m├Ч[31m reads the head of the first matching entry without decompressing the rest[39m[32m 2[2mms[22m[39m
+     [32mтЬУ[39m returns null when nothing matches[32m 1[2mms[22m[39m
+ [32mтЬУ[39m src/lib/fb2-scan.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32mтЬУ[39m src/lib/id3.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32mтЬУ[39m src/lib/meta-status.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32mтЬУ[39m src/lib/book-parser.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 7[2mms[22m[39m
 
 тОптОптОптОптОптОптОп Failed Tests 4 тОптОптОптОптОптОптОп
 
@@ -34,13 +34,13 @@ AssertionError: expected +0 to be 3 // Object.is equality
 - 3
 + 0
 
- тЭп src/lib/zip-utils.test.ts:112:41
-    110|     ])
-    111|     const entries = await unzip(zip)
-    112|     expect(Object.keys(entries).length).toBe(3)
+ тЭп src/lib/zip-utils.test.ts:110:41
+    108|     ])
+    109|     const entries = await unzip(zip)
+    110|     expect(Object.keys(entries).length).toBe(3)
        |                                         ^
-    113|     expect(dec(entries['META-INF/container.xml'])).toContain('<?xml')
-    114|     expect(dec(entries['OEBPS/content.opf'])).toBe('package')
+    111|     expect(dec(entries['META-INF/container.xml'])).toContain('<?xml')
+    112|     expect(dec(entries['OEBPS/content.opf'])).toBe('package')
 
 тОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОп[1/4]тОп
 
@@ -52,43 +52,43 @@ AssertionError: expected '' to be '<container/>' // Object.is equality
 
 - <container/>
 
- тЭп src/lib/zip-utils.test.ts:131:52
-    129|     ])
-    130|     const entries = await unzip(zip)
-    131|     expect(dec(entries['META-INF/container.xml'])).toBe('<container/>')
+ тЭп src/lib/zip-utils.test.ts:129:52
+    127|     ])
+    128|     const entries = await unzip(zip)
+    129|     expect(dec(entries['META-INF/container.xml'])).toBe('<container/>')
        |                                                    ^
-    132|     expect(dec(entries['text.html'])).toBe('<html></html>')
-    133|   })
+    130|     expect(dec(entries['text.html'])).toBe('<html></html>')
+    131|   })
 
 тОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОп[2/4]тОп
 
  FAIL  src/lib/zip-utils.test.ts > unzip > decodes UTF-8 entry names
 AssertionError: expected [] to include '╨║╨╜╨╕╨│╨░/╨│╨╗╨░╨▓╨░ 1.html'
- тЭп src/lib/zip-utils.test.ts:138:34
-    136|     const zip = buildZip([{ name: '╨║╨╜╨╕╨│╨░/╨│╨╗╨░╨▓╨░ 1.html', data: new TextтАж
-    137|     const entries = await unzip(zip)
-    138|     expect(Object.keys(entries)).toContain('╨║╨╜╨╕╨│╨░/╨│╨╗╨░╨▓╨░ 1.html')
+ тЭп src/lib/zip-utils.test.ts:136:34
+    134|     const zip = buildZip([{ name: '╨║╨╜╨╕╨│╨░/╨│╨╗╨░╨▓╨░ 1.html', data: new TextтАж
+    135|     const entries = await unzip(zip)
+    136|     expect(Object.keys(entries)).toContain('╨║╨╜╨╕╨│╨░/╨│╨╗╨░╨▓╨░ 1.html')
        |                                  ^
-    139|   })
-    140|
+    137|   })
+    138|
 
 тОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОп[3/4]тОп
 
  FAIL  src/lib/zip-utils.test.ts > readFirstEntryHead > reads the head of the first matching entry without decompressing the rest
 AssertionError: expected null not to be null
- тЭп src/lib/zip-utils.test.ts:155:22
-    153|     ])
-    154|     const head = await readFirstEntryHead(zip, (n) => n.endsWith('.mp3тАж
-    155|     expect(head).not.toBeNull()
+ тЭп src/lib/zip-utils.test.ts:153:22
+    151|     ])
+    152|     const head = await readFirstEntryHead(zip, (n) => n.endsWith('.mp3тАж
+    153|     expect(head).not.toBeNull()
        |                      ^
-    156|     expect(head!.matches).toBe(1)
-    157|     expect(head!.data.length).toBe(1024)
+    154|     expect(head!.matches).toBe(1)
+    155|     expect(head!.data.length).toBe(1024)
+
 
 тОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОп[4/4]тОп
 
-
 [2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (6)[39m
 [2m      Tests [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m43 passed[39m[22m[90m (47)[39m
-[2m   Start at [22m 15:16:30
-[2m   Duration [22m 452ms[2m (transform 62%, import 23%, tests 9%, worker 6%)[22m
+[2m   Start at [22m 15:19:33
+[2m   Duration [22m 307ms[2m (transform 61%, import 23%, tests 10%, worker 6%)[22m
 

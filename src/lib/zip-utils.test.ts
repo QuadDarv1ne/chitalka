@@ -24,10 +24,8 @@ function buildZip(
   for (const f of files) {
     const nameBytes = enc.encode(f.name)
     const raw = f.data
-    const compressed = f.deflate
-      ? new Uint8Array(deflateRawSync(Buffer.from(raw)))
-      : raw
-    const stored = f.deflate ?? false
+    const deflated = f.deflate === true
+    const compressed = deflated ? new Uint8Array(deflateRawSync(Buffer.from(raw))) : raw
     const flags = (f.useDescriptor ? 0x08 : 0) | 0x800 // UTF-8 names
 
     const local = new Uint8Array(30 + nameBytes.length)
@@ -35,7 +33,7 @@ function buildZip(
     lv.setUint32(0, 0x04034b50, true)
     lv.setUint16(4, 20, true) // version needed
     lv.setUint16(6, flags, true)
-    lv.setUint16(8, stored ? 8 : 0, true) // method
+    lv.setUint16(8, deflated ? 8 : 0, true) // method: 8 deflate, 0 stored
     lv.setUint16(10, 0, true) // time
     lv.setUint16(12, 0x2100, true) // date (must be non-zero)
     lv.setUint32(14, 0, true) // crc — zero when using a descriptor
@@ -45,8 +43,8 @@ function buildZip(
     lv.setUint16(28, 0, true)
     local.set(nameBytes, 30)
 
+    const localHeaderOffset = offset
     push(local)
-    const localDataOffset = offset
     push(compressed)
     if (f.useDescriptor) {
       const desc = new Uint8Array(16)
@@ -64,7 +62,7 @@ function buildZip(
     cv.setUint16(4, 20, true) // version made by
     cv.setUint16(6, 20, true) // version needed
     cv.setUint16(8, flags, true)
-    cv.setUint16(10, stored ? 8 : 0, true)
+    cv.setUint16(10, deflated ? 8 : 0, true)
     cv.setUint16(12, 0, true)
     cv.setUint16(14, 0x2100, true)
     cv.setUint32(16, 0, true) // crc
@@ -72,7 +70,7 @@ function buildZip(
     cv.setUint32(24, raw.length, true)
     cv.setUint16(28, nameBytes.length, true)
     // extra, comment, disk, attrs all zero
-    cv.setUint32(42, localDataOffset, true)
+    cv.setUint32(42, localHeaderOffset, true)
     cd.set(nameBytes, 46)
     central.push(cd)
   }
