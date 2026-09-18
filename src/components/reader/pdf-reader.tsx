@@ -251,13 +251,22 @@ export function PdfReader({ book, onProgress }: Props) {
       const p = (e as CustomEvent<number>).detail
       if (typeof p === 'number') goToPage(p)
     }
+    // Seek bar: jump to a percent of the book (page number = percent × pages)
+    const onGotoPercent = (e: Event) => {
+      const p = (e as CustomEvent<number>).detail
+      if (typeof p === 'number' && Number.isFinite(p) && totalPages > 0) {
+        goToPage(Math.max(1, Math.min(totalPages, Math.round(p * (totalPages - 1)) + 1)))
+      }
+    }
     window.addEventListener('keydown', onKey)
     window.addEventListener('pdf-goto-page', onGotoPage)
+    window.addEventListener('reader:goto-percent', onGotoPercent)
     return () => {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('pdf-goto-page', onGotoPage)
+      window.removeEventListener('reader:goto-percent', onGotoPercent)
     }
-  }, [prev, next, goToPage])
+  }, [prev, next, goToPage, totalPages])
 
   if (loading) {
     return (

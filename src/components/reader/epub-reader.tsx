@@ -216,9 +216,29 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
         }
       }
     }
+    // Seek bar: jump to a percent of the book via the generated location map.
+    // If locations failed to generate, the jump is skipped quietly.
+    const onGotoPercent = (e: Event) => {
+      const p = (e as CustomEvent<number>).detail
+      const rendition = renditionRef.current
+      const bk = bookRef.current
+      if (typeof p !== 'number' || !Number.isFinite(p) || !rendition || !bk) return
+      try {
+        const cfi = bk.locations.cfiFromPercentage(Math.max(0, Math.min(1, p)))
+        if (cfi) {
+          stopTtsRef.current()
+          rendition.display(cfi).catch(() => {
+            logger.warn('EPUB: failed to seek to', p)
+          })
+        }
+      } catch (err) {
+        logger.warn('EPUB: seek failed', err)
+      }
+    }
     window.addEventListener('epub-goto', onGoto)
     window.addEventListener('epub-goto-cfi', onGotoCfi)
     window.addEventListener('epub-goto-spine', onGotoSpine)
+    window.addEventListener('reader:goto-percent', onGotoPercent)
 
     return () => {
       disposed = true
@@ -226,6 +246,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
       window.removeEventListener('epub-goto', onGoto)
       window.removeEventListener('epub-goto-cfi', onGotoCfi)
       window.removeEventListener('epub-goto-spine', onGotoSpine)
+      window.removeEventListener('reader:goto-percent', onGotoPercent)
       rendition.off('relocated', onLocated)
       if (ttsAdvanceTimerRef.current) {
         clearTimeout(ttsAdvanceTimerRef.current)
@@ -293,7 +314,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
     } catch (e) {
       logger.warn('EPUB: failed to apply theme/settings', e)
     }
-  }, [settings.theme, settings.fontFamily, settings.fontSize, settings.lineHeight, settings.textAlign, settings.hyphens, ready])
+  }, [settings.theme, settings.fontFamily, settings.fontSize, settings.lineHeight, settings.textAlign, settings.hyphens, settings.columnWidth, ready])
 
 // TTS: extract the text of the current viewport via CFI range.
   const getCurrentText = useCallback((): string => {
@@ -371,8 +392,12 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
         ref={viewerRef}
         className="h-full"
         style={{
-          width: settings.twoPage ? '100%' : 'min(100%, 720px)',
-          margin: settings.twoPage ? '0 auto' : '0 auto',
+          // User-configurable column width, capped at 1200px so EPUB lines
+          // stay readable; a two-page spread always uses the full width.
+          width: settings.twoPage
+            ? '100%'
+            : `min(100%, min(1200px, ${settings.columnWidth}vw))`,
+          margin: '0 auto',
         }}
       />
 

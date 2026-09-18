@@ -260,6 +260,49 @@ export function HtmlReader({ book, onProgress }: Props) {
     }
   }, [totalPages, pages, findPageForPosition, alignToSpread])
 
+  // Jump to an arbitrary point in the book (percent 0..1) — fired by the
+  // draggable progress bar in the reader footer.
+  useEffect(() => {
+    const onGotoPercent = (e: Event) => {
+      const p = (e as CustomEvent<number>).detail
+      if (typeof p !== 'number' || !Number.isFinite(p) || totalPages === 0) return
+      const target = alignToSpread(
+        Math.max(0, Math.min(totalPages - 1, Math.round(p * (totalPages - 1)))),
+      )
+      setPage(target)
+      setPagesFlipped((n) => n + 1)
+      containerRef.current?.scrollTo({ top: 0 })
+    }
+    window.addEventListener('reader:goto-percent', onGotoPercent)
+    return () => window.removeEventListener('reader:goto-percent', onGotoPercent)
+  }, [totalPages, alignToSpread])
+
+  // Wheel page flipping, like e-ink readers: flip forward when the page is
+  // scrolled to its end (or doesn't scroll at all), backward at its top.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    let lastFlip = 0
+    const onWheel = (e: WheelEvent) => {
+      const now = Date.now()
+      if (now - lastFlip < 350) return
+      const scrollable = el.scrollHeight - el.clientHeight > 4
+      if (e.deltaY > 30) {
+        if (!scrollable || el.scrollTop + el.clientHeight >= el.scrollHeight - 4) {
+          lastFlip = now
+          next()
+        }
+      } else if (e.deltaY < -30) {
+        if (!scrollable || el.scrollTop <= 4) {
+          lastFlip = now
+          prev()
+        }
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: true })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [prev, next])
+
   // Messages from the reader iframe: text selection and highlight clicks
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -349,6 +392,9 @@ export function HtmlReader({ book, onProgress }: Props) {
             textAlign: settings.textAlign,
             paddingLeft: `${settings.margin * 1.5}rem`,
             paddingRight: `${settings.margin * 1.5}rem`,
+            // User-configurable text column width (single-page mode only —
+            // a two-page spread needs the full width)
+            ...(twoPage ? {} : { maxWidth: `min(100rem, ${settings.columnWidth}vw)` }),
           }}
         >
           {/* Left page */}

@@ -174,6 +174,28 @@ export function ReaderSettingsPanel() {
         />
       </section>
 
+      {/* Column width */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+            Ширина текста
+          </Label>
+          <span className="text-sm font-medium tabular-nums">
+            {settings.columnWidth}%
+          </span>
+        </div>
+        <Slider
+          value={[settings.columnWidth]}
+          min={50}
+          max={100}
+          step={1}
+          onValueChange={(v) => updateSettings({ columnWidth: v[0] })}
+        />
+        <p className="text-xs text-muted-foreground">
+          Узкая колонка удобнее для глаз (TXT, MD, HTML, EPUB)
+        </p>
+      </section>
+
       <Separator />
 
       {/* Text align */}

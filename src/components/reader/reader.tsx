@@ -198,6 +198,17 @@ export function Reader() {
     return () => document.removeEventListener('fullscreenchange', onFsChange)
   }, [])
 
+  // Seek bar: click/drag on the bottom progress bar jumps to that point in
+  // the book. Readers that support seeking listen for the event; others
+  // simply ignore it.
+  const progressBarRef = useRef<HTMLDivElement>(null)
+  const seekTo = useCallback((clientX: number) => {
+    const rect = progressBarRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0) return
+    const p = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+    window.dispatchEvent(new CustomEvent('reader:goto-percent', { detail: p }))
+  }, [])
+
   // Global keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -452,9 +463,26 @@ export function Reader() {
         >
           <span className="tabular-nums">{Math.round(progress * 100)}%</span>
         </Button>
-        <div className="flex-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+        <div
+          ref={progressBarRef}
+          className="flex-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden cursor-pointer touch-none"
+          role="slider"
+          aria-label="Позиция в книге"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress * 100)}
+          onPointerDown={(e) => {
+            // Capture the pointer so dragging outside the bar still works
+            e.currentTarget.setPointerCapture(e.pointerId)
+            seekTo(e.clientX)
+          }}
+          onPointerMove={(e) => {
+            // Live scrub while the pointer is captured (button pressed)
+            if (e.currentTarget.hasPointerCapture(e.pointerId)) seekTo(e.clientX)
+          }}
+        >
           <div
-            className="h-full bg-primary transition-all"
+            className="h-full bg-primary transition-all pointer-events-none"
             style={{ width: `${Math.max(2, progress * 100)}%` }}
           />
         </div>

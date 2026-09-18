@@ -25,6 +25,7 @@ export interface ReaderSettings {
   fontSize: number // 14..28
   lineHeight: number // 1.2..2.4
   margin: number // 1..6
+  columnWidth: number // 50..100, max text column width as % of viewport
   textAlign: 'left' | 'justify'
   hyphens: boolean
   twoPage: boolean // show two pages side-by-side (spread) on wide screens
@@ -137,6 +138,7 @@ const defaultSettings: ReaderSettings = {
   fontSize: 18,
   lineHeight: 1.7,
   margin: 3,
+  columnWidth: 97,
   textAlign: 'justify',
   hyphens: true,
   twoPage: false,
@@ -175,6 +177,7 @@ function mergeSettings(partial: Partial<ReaderSettings> | null | undefined): Rea
     base.fontSize = clamp(raw.fontSize, 12, 28, defaultSettings.fontSize)
     base.lineHeight = Math.round(clamp(raw.lineHeight, 1.2, 2.4, defaultSettings.lineHeight) * 10) / 10
     base.margin = clamp(raw.margin, 1, 6, defaultSettings.margin)
+    base.columnWidth = clamp(raw.columnWidth, 50, 100, defaultSettings.columnWidth)
     base.ttsRate = Math.round(clamp(raw.ttsRate, 0.5, 2.0, defaultSettings.ttsRate) * 10) / 10
     base.dailyGoalMinutes = clamp(raw.dailyGoalMinutes, 5, 240, defaultSettings.dailyGoalMinutes)
     // Booleans
@@ -348,7 +351,7 @@ export const useReaderStore = create<ReaderState>()(
     }),
     {
       name: 'reader-store',
-      version: 4,
+      version: 5,
       partialize: (s) => ({
         settings: s.settings,
         bookmarks: s.bookmarks,
@@ -378,6 +381,12 @@ export const useReaderStore = create<ReaderState>()(
           // v3 → v4: add twoPage setting (defaults via mergeSettings below)
           if (next?.settings && typeof next.settings.twoPage !== 'boolean') {
             next.settings.twoPage = false
+          }
+        }
+        if (version < 5) {
+          // v4 → v5: add columnWidth setting (defaults via mergeSettings below)
+          if (next?.settings && typeof next.settings.columnWidth !== 'number') {
+            next.settings.columnWidth = defaultSettings.columnWidth
           }
         }
         return {
