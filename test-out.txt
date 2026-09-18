@@ -1,42 +1,94 @@
+
+> chitalka@0.2.0 test
+> vitest run
+
 (!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
   - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
 Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
 
-тОптОптОптОптОптОптОп Startup Error тОптОптОптОптОптОптОптОп
-Error: Failed to load custom Reporter from basic
-    at loadCustomReporterModule (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/index.DzobfTyw.js:18401:9)
-    at file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/index.DzobfTyw.js:18417:23
-    ... 3 lines matching cause stack trace ...
-    at createVitest (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/cli-api.DcLieX4F.js:29:3)
-    at prepareVitest (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/cli-api.DcLieX4F.js:421:14)
-    at startVitest (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/cli-api.DcLieX4F.js:340:14)
-    at start (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/cac.fSuRXrAx.js:2370:15)
-    at CAC.run (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/cac.fSuRXrAx.js:2346:2) {
-  [cause]: Error: Failed to load url basic (resolved id: basic). Does the file exist?
-      at reviveInvokeError (file:///M:/GitHub/chitalk%D0%B0/node_modules/vite/dist/node/module-runner.js:540:14)
-      at Object.invoke (file:///M:/GitHub/chitalk%D0%B0/node_modules/vite/dist/node/module-runner.js:556:33)
-      at ServerModuleRunner.getModuleInformation (file:///M:/GitHub/chitalk%D0%B0/node_modules/vite/dist/node/module-runner.js:1210:7)
-      at ServerModuleRunner.import (file:///M:/GitHub/chitalk%D0%B0/node_modules/vite/dist/node/module-runner.js:1131:23)
-      at loadCustomReporterModule (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/index.DzobfTyw.js:18399:26)
-      at file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/index.DzobfTyw.js:18417:23
-      at async Promise.all (index 0)
-      at Vitest._attachProjectServers (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/index.DzobfTyw.js:20625:20)
-      at Vitest._start (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/index.DzobfTyw.js:20468:3)
-      at createVitest (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/cli-api.DcLieX4F.js:29:3) {
-    code: 'ERR_LOAD_URL',
-    runnerError: Error: RunnerError
-        at reviveInvokeError (file:///M:/GitHub/chitalk%D0%B0/node_modules/vite/dist/node/module-runner.js:541:64)
-        at Object.invoke (file:///M:/GitHub/chitalk%D0%B0/node_modules/vite/dist/node/module-runner.js:556:33)
-        at ServerModuleRunner.getModuleInformation (file:///M:/GitHub/chitalk%D0%B0/node_modules/vite/dist/node/module-runner.js:1210:7)
-        at ServerModuleRunner.import (file:///M:/GitHub/chitalk%D0%B0/node_modules/vite/dist/node/module-runner.js:1131:23)
-        at loadCustomReporterModule (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/index.DzobfTyw.js:18399:26)
-        at file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/index.DzobfTyw.js:18417:23
-        at async Promise.all (index 0)
-        at Vitest._attachProjectServers (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/index.DzobfTyw.js:20625:20)
-        at Vitest._start (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/index.DzobfTyw.js:20468:3)
-        at createVitest (file:///M:/GitHub/chitalk%D0%B0/node_modules/vitest/dist/chunks/cli-api.DcLieX4F.js:29:3)
-  }
-}
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90mM:/GitHub/chitalk╨░[39m
+
+ [32mтЬУ[39m src/lib/text-encoding.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [31mтЭп[39m src/lib/zip-utils.test.ts [2m([22m[2m6 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[32m 20[2mms[22m[39m
+   [31mтЭп[39m unzip [2m(4)[22m
+[31m     [31m├Ч[31m extracts stored and deflated entries via the central directory[39m[32m 10[2mms[22m[39m
+[31m     [31m├Ч[31m recovers sizes from the central directory when local headers use data descriptors[39m[32m 1[2mms[22m[39m
+[31m     [31m├Ч[31m decodes UTF-8 entry names[39m[32m 3[2mms[22m[39m
+     [32mтЬУ[39m returns an empty map for non-ZIP data[32m 1[2mms[22m[39m
+   [31mтЭп[39m readFirstEntryHead [2m(2)[22m
+[31m     [31m├Ч[31m reads the head of the first matching entry without decompressing the rest[39m[32m 3[2mms[22m[39m
+     [32mтЬУ[39m returns null when nothing matches[32m 0[2mms[22m[39m
+ [32mтЬУ[39m src/lib/fb2-scan.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32mтЬУ[39m src/lib/meta-status.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32mтЬУ[39m src/lib/id3.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32mтЬУ[39m src/lib/book-parser.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+
+тОптОптОптОптОптОптОп Failed Tests 4 тОптОптОптОптОптОптОп
+
+ FAIL  src/lib/zip-utils.test.ts > unzip > extracts stored and deflated entries via the central directory
+AssertionError: expected +0 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 0
+
+ тЭп src/lib/zip-utils.test.ts:112:41
+    110|     ])
+    111|     const entries = await unzip(zip)
+    112|     expect(Object.keys(entries).length).toBe(3)
+       |                                         ^
+    113|     expect(dec(entries['META-INF/container.xml'])).toContain('<?xml')
+    114|     expect(dec(entries['OEBPS/content.opf'])).toBe('package')
+
+тОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОп[1/4]тОп
+
+ FAIL  src/lib/zip-utils.test.ts > unzip > recovers sizes from the central directory when local headers use data descriptors
+AssertionError: expected '' to be '<container/>' // Object.is equality
+
+- Expected
++ Received
+
+- <container/>
+
+ тЭп src/lib/zip-utils.test.ts:131:52
+    129|     ])
+    130|     const entries = await unzip(zip)
+    131|     expect(dec(entries['META-INF/container.xml'])).toBe('<container/>')
+       |                                                    ^
+    132|     expect(dec(entries['text.html'])).toBe('<html></html>')
+    133|   })
+
+тОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОп[2/4]тОп
+
+ FAIL  src/lib/zip-utils.test.ts > unzip > decodes UTF-8 entry names
+AssertionError: expected [] to include '╨║╨╜╨╕╨│╨░/╨│╨╗╨░╨▓╨░ 1.html'
+ тЭп src/lib/zip-utils.test.ts:138:34
+    136|     const zip = buildZip([{ name: '╨║╨╜╨╕╨│╨░/╨│╨╗╨░╨▓╨░ 1.html', data: new TextтАж
+    137|     const entries = await unzip(zip)
+    138|     expect(Object.keys(entries)).toContain('╨║╨╜╨╕╨│╨░/╨│╨╗╨░╨▓╨░ 1.html')
+       |                                  ^
+    139|   })
+    140|
+
+тОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОп[3/4]тОп
+
+ FAIL  src/lib/zip-utils.test.ts > readFirstEntryHead > reads the head of the first matching entry without decompressing the rest
+AssertionError: expected null not to be null
+ тЭп src/lib/zip-utils.test.ts:155:22
+    153|     ])
+    154|     const head = await readFirstEntryHead(zip, (n) => n.endsWith('.mp3тАж
+    155|     expect(head).not.toBeNull()
+       |                      ^
+    156|     expect(head!.matches).toBe(1)
+    157|     expect(head!.data.length).toBe(1024)
+
+тОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОп[4/4]тОп
 
 
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (6)[39m
+[2m      Tests [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m43 passed[39m[22m[90m (47)[39m
+[2m   Start at [22m 15:16:30
+[2m   Duration [22m 452ms[2m (transform 62%, import 23%, tests 9%, worker 6%)[22m
 

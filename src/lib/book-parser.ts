@@ -393,8 +393,9 @@ export function cleanBookFilename(filename: string): string {
   // Archive/library suffixes: ".a4", ".a6", " (1)", "_2"
   name = name.replace(/\.[a-z]\d$/i, '')
   name = name.replace(/\s*\((?:\d+|copy|копия)\)$/i, '')
-  // Long digit runs are catalogue ids, not part of a title
-  name = name.replace(/[_\s]\d{5,}\b/g, '')
+  // Long digit runs are catalogue ids, not part of a title. The optional
+  // 1-2 letter prefix covers dump formats like "_Ye66992464" or "_K12345".
+  name = name.replace(/[_\s](?:[A-Za-z]{1,2})?\d{5,}\b/g, '')
   name = name.replace(/_/g, ' ')
   name = name.replace(/\s{2,}/g, ' ')
   name = name.replace(/^[\s.\-–—]+|[\s.\-–—]+$/g, '')

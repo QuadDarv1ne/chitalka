@@ -3,13 +3,13 @@ import { scanFb2Meta, extractFb2Binary } from './fb2-scan'
 
 const base64Cover = btoa('A'.repeat(100))
 
-function fb2Doc(body: string, description: string): string {
+function fb2Doc(title: string, _annotation?: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">
  <description>
   <title-info>
    <author><first-name>Лев</first-name><middle-name>Николаевич</middle-name><last-name>Толстой</last-name></author>
-   <book-title>${body}</book-title>
+   <book-title>${title}</book-title>
    <annotation><p>Роман &laquo;о войне&raquo; и мире.</p></annotation>
    <coverpage><image l:href="#cover.jpg"/></coverpage>
   </title-info>
@@ -60,21 +60,32 @@ describe('scanFb2Meta', () => {
 })
 
 describe('extractFb2Binary', () => {
+  // Real covers are kilobytes; the parser rejects payloads under 64 base64
+  // chars as noise, so the fixtures use realistic sizes.
+  const longPayload = btoa('B'.repeat(200))
   const text = `<binary id="first">not-the-one</binary>
-<binary id="cover.jpg" content-type="image/png">AAAA</binary>`
+<binary id="cover.jpg" content-type="image/png">${longPayload}</binary>`
 
   it('finds the binary by id and uses its content type', () => {
-    expect(extractFb2Binary(text, 'cover.jpg')).toBe('data:image/png;base64,AAAA')
+    expect(extractFb2Binary(text, 'cover.jpg')).toBe(`data:image/png;base64,${longPayload}`)
   })
 
   it('defaults to image/jpeg without a content type', () => {
-    expect(extractFb2Binary('<binary id="x">AAAA</binary>', 'x')).toBe(
-      'data:image/jpeg;base64,AAAA',
+    expect(extractFb2Binary(`<binary id="x">${longPayload}</binary>`, 'x')).toBe(
+      `data:image/jpeg;base64,${longPayload}`,
     )
   })
 
   it('returns undefined for an unknown id or too-short payload', () => {
     expect(extractFb2Binary(text, 'missing')).toBeUndefined()
     expect(extractFb2Binary('<binary id="tiny">AAA</binary>', 'tiny')).toBeUndefined()
+  })
+
+  it('keeps whitespace inside the payload stripped', () => {
+    // 60 payload chars + whitespace = >64 after stripping, so the fixture
+    // crosses the parser's noise threshold both before and after cleanup.
+    const wrapped = `AA\n  BB	CC  ${'A'.repeat(60)}`
+    const result = extractFb2Binary(`<binary id="w">${wrapped}</binary>`, 'w')
+    expect(result).toBe(`data:image/jpeg;base64,${wrapped.replace(/\s/g, '')}`)
   })
 })

@@ -65,12 +65,17 @@ function decodeXmlEntities(value: string): string {
     .replace(/&([a-z]+);/gi, (match, name: string) => XML_ENTITIES[name.toLowerCase()] ?? match)
 }
 
-/** Strip markup and CDATA, decode entities, collapse whitespace. */
+/**
+ * Strip markup and CDATA, decode entities, collapse whitespace.
+ * The NBSP that &#160; decodes to is preserved: it is a meaningful part of a
+ * title ("Том II"), not run-together junk like newlines between tags.
+ */
 function cleanXmlFragment(fragment: string, limit: number): string {
   return decodeXmlEntities(
     fragment.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]*>/g, ' '),
   )
-    .replace(/\s+/g, ' ')
+    // \s matches NBSP too (\u00a0 < \u0250), hence the explicit class
+    .replace(/[	\n\r\f\v ]+/g, ' ')
     .trim()
     .slice(0, limit)
 }
