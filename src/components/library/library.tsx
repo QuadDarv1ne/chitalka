@@ -318,7 +318,7 @@ export function Library() {
   )
 
   // Open a random book — prefers unread / in-progress books so the
-  // «Случайная книга» button is useful beyond the first week of use.
+  // Random book button is useful beyond the first week of use.
   const openRandomBook = useCallback(() => {
     if (books.length === 0) return
     const unfinished = books.filter((b) => (b.progress ?? 0) < 0.99)
@@ -353,7 +353,7 @@ export function Library() {
     try {
       const isFav = await toggleFavorite(id)
       setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, favorite: isFav } : b)))
-      toast.success(isFav ? `«${title}» добавлена в избранное` : `«${title}» удалена из избранного`)
+      toast.success(isFav ? `${title} добавлена в избранное` : `${title} удалена из избранного`)
     } catch (e) {
       logger.error('Favorite toggle failed', e)
       toast.error('Ошибка изменения избранного')
@@ -902,7 +902,7 @@ export function Library() {
           <DialogHeader>
             <DialogTitle>Удалить книгу?</DialogTitle>
             <DialogDescription>
-              «{deleteTarget?.title}» будет удалена из библиотеки вместе с закладками,
+              {deleteTarget?.title} будет удалена из библиотеки вместе с закладками,
               выделениями и статистикой чтения. Это действие нельзя отменить.
             </DialogDescription>
           </DialogHeader>
@@ -976,7 +976,7 @@ export function Library() {
                     : b
                 )
               )
-              toast.success(`«${detailsTarget.title}» отмечена как прочитанная`)
+              toast.success(`${detailsTarget.title} отмечена как прочитанная`)
               setDetailsTarget(null)
             }).catch((e) => {
               logger.error('Mark as read failed', e)

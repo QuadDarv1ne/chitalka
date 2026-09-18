@@ -105,16 +105,16 @@ export function PwaSetup() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Smartphone className="h-5 w-5 text-muted-foreground" />
-              Установить на экран «Домой»
+              Установить на экран Домой
             </DialogTitle>
             <DialogDescription>
               Добавьте Читалку на главный экран для быстрого доступа и работы офлайн.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm text-muted-foreground">
-            <p><strong>Chrome (Android):</strong> меню ⋮ → «Установить приложение» или «Добавить на гл. экран»</p>
-            <p><strong>Safari (iOS):</strong> кнопка «Поделиться» → «На экран "Домой"»</p>
-            <p><strong>Firefox (Android):</strong> меню ⋮ → «Установить»</p>
+            <p><strong>Chrome (Android):</strong> меню ⋮ → Установить приложение или Добавить на гл. экран</p>
+            <p><strong>Safari (iOS):</strong> кнопка Поделиться → На экран Домой</p>
+            <p><strong>Firefox (Android):</strong> меню ⋮ → Установить</p>
           </div>
           <DialogFooter>
             <Button onClick={() => setShowInstallDialog(false)}>Понятно</Button>

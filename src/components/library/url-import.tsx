@@ -110,7 +110,7 @@ export function UrlImportDialog({ open, onOpenChange, onImported }: Props) {
       }
       if (!detectFormat(name)) {
         throw new Error(
-          `Формат файла «${name}» не поддерживается (нужен EPUB, PDF, FB2, TXT, MD, HTML или MP3)`,
+          `Формат файла ${name} не поддерживается (нужен EPUB, PDF, FB2, TXT, MD, HTML или MP3)`,
         )
       }
 
@@ -190,7 +190,7 @@ export function UrlImportDialog({ open, onOpenChange, onImported }: Props) {
         <p className="text-xs text-muted-foreground">
           Не все сайты разрешают загрузку из браузера (ограничения CORS).
           Хорошо работают прямые ссылки на файлы (archive.org, GitHub, Google Drive
-          в режиме «прямой доступ»).
+          в режиме прямого доступа).
         </p>
       </DialogContent>
     </Dialog>

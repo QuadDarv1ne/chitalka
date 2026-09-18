@@ -336,7 +336,7 @@ export function SearchDialog({ book }: Props) {
             )}
             {!query && (
               <p className="text-center text-sm text-muted-foreground py-8">
-                Введите запрос и нажмите «Найти»
+                Введите запрос и нажмите Найти
               </p>
             )}
           </ul>
