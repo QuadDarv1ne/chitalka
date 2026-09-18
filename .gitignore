@@ -22,8 +22,8 @@ import-metadata.json
 dev.log
 server.log
 
-# download folder
-download/
+# download folder (root only — must not swallow src/app/api/books/download/)
+/download/
 
 # Large audiobook archives (>100MB GitHub limit)
 books/Nil_donald_uolsh_razgovor_s_bogom_opyit_obsheniya_chelovechestva_s_vyissheyi_siloyi.mp3.zip
