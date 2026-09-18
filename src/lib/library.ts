@@ -24,6 +24,12 @@ export interface BookRecord {
   userId?: string | null // null = anonymous (logged out)
   rating?: number // 1-5 stars
   favorite?: boolean // is this book a favorite?
+  /**
+   * When the metadata was last read from the file itself. Undefined for books
+   * imported before metadata tracking existed, which is exactly the set of
+   * entries most likely to show a file name instead of a title.
+   */
+  parsedAt?: number
 }
 
 interface LibraryDB extends DBSchema {

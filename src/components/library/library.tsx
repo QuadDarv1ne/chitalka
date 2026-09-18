@@ -44,9 +44,13 @@ import {
   Dices,
   Link2,
   Heart,
+  Pencil,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react'
 import {
   getAllBooks,
+  getBook,
   saveBook,
   deleteBook,
   updateBook,
@@ -63,6 +67,7 @@ import {
   parseFb2Meta,
   parseFb2Content,
   parseAudioMeta,
+  type ParsedBook as ParsedMeta,
 } from '@/lib/book-parser'
 import {
   useReaderStore,
@@ -73,6 +78,7 @@ import {
   localDateString,
 } from '@/store/reader-store'
 import { getWordsPerMinute } from '@/store/reader-store'
+import { missingMetadata } from '@/lib/meta-status'
 import { estimateRemainingMinutes, formatMinutes } from '@/lib/constants'
 import { useAuth } from '@/hooks/use-auth'
 import { useBookSync, useServerBookSync } from '@/hooks/use-book-sync'
@@ -271,6 +277,7 @@ export function Library() {
                 description: meta.description,
                 blob,
                 addedAt: Date.now(),
+                parsedAt: Date.now(),
                 userId,
               }
               await saveBook(book)
@@ -368,8 +375,69 @@ export function Library() {
     [],
   )
 
+  /**
+   * Re-run the parser on a stored blob.
+   *
+   * Metadata is parsed once at import time, so a book imported before a parser
+   * was fixed keeps its broken title forever. The blob is still on disk, so the
+   * fields can be recovered without asking the user to re-add the file.
+   */
+  const handleReparseMeta = useCallback(async (id: string) => {
+    try {
+      const stored = await getBook(id)
+      if (!stored) {
+        toast.error('Файл книги не найден в хранилище')
+        return
+      }
+      const asFile = new File([stored.blob], stored.title, { type: stored.blob.type })
+      let meta: ParsedMeta
+      if (stored.format === 'epub') {
+        meta = await parseEpubMeta(stored.blob)
+      } else if (stored.format === 'pdf') {
+        meta = await parsePdfMeta(asFile)
+      } else if (stored.format === 'fb2') {
+        // Stored as converted plain text, so only the original name is left to
+        // read; the text body carries no metadata to recover.
+        meta = await parseFb2Meta(asFile)
+      } else if (stored.format === 'mp3') {
+        meta = await parseAudioMeta(asFile)
+      } else {
+        toast.info('Для этого формата перечитывать нечего')
+        return
+      }
+
+      const patch: Partial<BookRecord> = {}
+      if (meta.title) patch.title = meta.title
+      if (meta.author) patch.author = meta.author
+      if (meta.cover) patch.cover = meta.cover
+      if (meta.description) patch.description = meta.description
+      if (Object.keys(patch).length === 0) {
+        // Empty result is the usual reason a card still shows a filename as its
+        // title, so say what was looked for instead of failing silently.
+        toast.info('Новых данных в файле не найдено', {
+          description: 'Нет ни тегов, ни обложки — название осталось из имени файла',
+        })
+        return
+      }
+      // The file was parsed with the current parsers either way; stamping the
+      // date keeps "imported before the parsers were fixed" detectable.
+      patch.parsedAt = Date.now()
+      await updateBook(id, patch)
+      setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)))
+      setDetailsTarget((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev))
+      const what = [patch.title && 'название', patch.author && 'автор', patch.cover && 'обложка']
+        .filter(Boolean)
+        .join(', ')
+      toast.success(`Метаданные обновлены: ${what}`)
+    } catch (e) {
+      logger.error('Metadata reparse failed', e)
+      toast.error('Не удалось перечитать метаданные')
+    }
+  }, [])
+
   const handleRestore = useCallback(
     async (files: FileList | null) => {
+      const file = files?.[0]
       if (!file) return
       try {
         const backup = await parseLibraryBackup(file)
@@ -901,6 +969,22 @@ export function Library() {
             })
           }
         }}
+        onSaveMeta={(title, author) => {
+          if (!detailsTarget) return
+          const id = detailsTarget.id
+          updateBook(id, { title, author })
+            .then(() => {
+              setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, title, author } : b)))
+              toast.success('Метаданные сохранены')
+            })
+            .catch((e) => {
+              logger.error('Metadata save failed', e)
+              toast.error('Ошибка сохранения')
+            })
+        }}
+        onReparseMeta={() => {
+          if (detailsTarget) return handleReparseMeta(detailsTarget.id)
+        }}
       />
     </div>
   )
@@ -1148,6 +1232,8 @@ function BookDetailsDialog({
   onResetProgress,
   onDownload,
   onMarkAsRead,
+  onSaveMeta,
+  onReparseMeta,
 }: {
   book: BookRecord | null
   sessions: ReadingSession[]
@@ -1159,8 +1245,14 @@ function BookDetailsDialog({
   onResetProgress: () => void
   onDownload: () => void
   onMarkAsRead: () => void
+  onSaveMeta: (title: string, author: string) => void
+  onReparseMeta: () => void
 }) {
   const [hoverRating, setHoverRating] = useState(0)
+  const [editing, setEditing] = useState(false)
+  const [draftTitle, setDraftTitle] = useState('')
+  const [draftAuthor, setDraftAuthor] = useState('')
+  const [reparsing, setReparsing] = useState(false)
   if (!book) return null
 
   const bookSessions = sessions.filter((s) => s.bookId === book.id)
@@ -1171,6 +1263,32 @@ function BookDetailsDialog({
   const progress = book.progress ?? 0
   const finished = isFinished(book.progress)
   const badge = FORMAT_BADGES[book.format]
+  // Parsers fall back to the file name when a file carries no metadata; saying
+  // so lets the reader fix it instead of wondering why the title is a slug.
+  const missing = missingMetadata(book)
+
+  const startEditing = () => {
+    setDraftTitle(book.title)
+    setDraftAuthor(book.author)
+    setEditing(true)
+  }
+
+  const submitEdit = () => {
+    const title = draftTitle.trim()
+    const author = draftAuthor.trim()
+    if (!title && !author) return
+    onSaveMeta(title || book.title, author || book.author)
+    setEditing(false)
+  }
+
+  const reparse = async () => {
+    setReparsing(true)
+    try {
+      await onReparseMeta()
+    } finally {
+      setReparsing(false)
+    }
+  }
 
   return (
     <Dialog open={!!book} onOpenChange={(o) => !o && onClose()}>
@@ -1194,10 +1312,44 @@ function BookDetailsDialog({
           </div>
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-base leading-snug" title={book.title}>
-              {book.title}
-            </h3>
-            <p className="text-sm text-muted-foreground mt-0.5">{book.author}</p>
+            {editing ? (
+              <div className="space-y-2">
+                <Input
+                  value={draftTitle}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  placeholder="Название"
+                  aria-label="Название"
+                  className="h-8 text-sm"
+                />
+                <Input
+                  value={draftAuthor}
+                  onChange={(e) => setDraftAuthor(e.target.value)}
+                  placeholder="Автор"
+                  aria-label="Автор"
+                  className="h-8 text-sm"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" variant="default" className="h-7 text-xs" onClick={submitEdit}>
+                    <Check className="h-3.5 w-3.5 mr-1" /> Сохранить
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    onClick={() => setEditing(false)}
+                  >
+                    <X className="h-3.5 w-3.5 mr-1" /> Отмена
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h3 className="font-semibold text-base leading-snug" title={book.title}>
+                  {book.title}
+                </h3>
+                <p className="text-sm text-muted-foreground mt-0.5">{book.author}</p>
+              </>
+            )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${badge.color}`}>
                 {badge.label}
@@ -1244,6 +1396,39 @@ function BookDetailsDialog({
                     style={{ width: `${Math.round(progress * 100)}%` }}
                   />
                 </div>
+              </div>
+            )}
+            {missing.any && !editing && (
+              <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>
+                  {missing.title && !missing.author
+                    ? 'Название взято из имени файла — в книге оно не записано.'
+                    : 'Часть данных не считалась из файла — их можно ввести вручную.'}
+                </span>
+              </p>
+            )}
+            {!editing && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={startEditing}
+                >
+                  <Pencil className="h-3.5 w-3.5 mr-1" /> Исправить
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={reparse}
+                  disabled={reparsing}
+                  title="Прочитать название, автора и обложку из файла заново"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 mr-1 ${reparsing ? 'animate-spin' : ''}`} />
+                  {reparsing ? 'Читаю…' : 'Перечитать метаданные'}
+                </Button>
               </div>
             )}
           </div>
