@@ -211,10 +211,22 @@ export function TxtReader({ book, onProgress }: Props) {
         if (e.key === ' ' || e.key === 'PageDown') e.preventDefault()
         next()
       }
+      else if (e.key === 'Home') {
+        e.preventDefault()
+        tts.stop()
+        setPage(0)
+        containerRef.current?.scrollTo({ top: 0 })
+      }
+      else if (e.key === 'End') {
+        e.preventDefault()
+        tts.stop()
+        if (totalPages > 0) setPage(alignToSpread(totalPages - 1))
+        containerRef.current?.scrollTo({ top: 0 })
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [prev, next])
+  }, [prev, next, tts, totalPages, alignToSpread])
 
   // Bookmark navigation — align the target to the spread so the panel
   // jump and the restore path behave identically in two-page mode

@@ -74,6 +74,9 @@ export function AudioReader({ book, onProgress }: Props) {
   const playingRef = useRef(false)
   const autoAdvanceRef = useRef(false)
   const didRestoreRef = useRef(false)
+  // Seek target (fraction of the track's duration) from the progress-bar
+  // jump — applied once the target track's metadata is loaded.
+  const pendingSeekRef = useRef<number | null>(null)
   // Throttle progress persistence: `timeupdate` fires ~4×/sec, and each
   // progress call does an IndexedDB read+write — an unbounded queue would
   // grow on slow devices. Save at most once per 3s (always immediately on
@@ -220,6 +223,16 @@ export function AudioReader({ book, onProgress }: Props) {
           audio.currentTime = saved
         }
       }
+      // Progress-bar jump: seek to a fraction of the target track's length
+      const pending = pendingSeekRef.current
+      if (pending !== null) {
+        pendingSeekRef.current = null
+        const target = pending * (audio.duration || 0)
+        if (target > 0 && target < audio.duration) {
+          audio.currentTime = target
+          setCurrentTime(target)
+        }
+      }
       audio.playbackRate = playbackRate
       audio.volume = volume
       audio.muted = muted
@@ -333,6 +346,74 @@ export function AudioReader({ book, onProgress }: Props) {
     window.addEventListener('audio-goto-track', onGotoTrack)
     return () => window.removeEventListener('audio-goto-track', onGotoTrack)
   }, [tracks.length])
+
+  // Seek bar: jump to a percent of the book. Tracks are weighted equally
+  // (same math as the progress calculation above), then the remainder
+  // seeks within the target track — the exact position is applied once
+  // the new track's metadata is loaded (pendingSeekRef).
+  useEffect(() => {
+    const onGotoPercent = (e: Event) => {
+      const p = (e as CustomEvent<number>).detail
+      if (typeof p !== 'number' || !Number.isFinite(p) || tracks.length === 0) return
+      const scaled = Math.max(0, Math.min(0.9999, p)) * tracks.length
+      const idx = Math.floor(scaled)
+      const frac = scaled - idx
+      pendingSeekRef.current = frac
+      setCurrentTrack(idx)
+    }
+    window.addEventListener('reader:goto-percent', onGotoPercent)
+    return () => window.removeEventListener('reader:goto-percent', onGotoPercent)
+  }, [tracks.length])
+
+  // Media Session: hardware/headset/lock-screen media keys control playback
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    const ms = navigator.mediaSession
+    try {
+      ms.setActionHandler('play', () => audioRef.current?.play().catch(() => {}))
+      ms.setActionHandler('pause', () => audioRef.current?.pause())
+      ms.setActionHandler('previoustrack', prevTrack)
+      ms.setActionHandler('nexttrack', nextTrack)
+      ms.setActionHandler('seekbackward', () => {
+        const audio = audioRef.current
+        if (audio) audio.currentTime = Math.max(0, audio.currentTime - 10)
+      })
+      ms.setActionHandler('seekforward', () => {
+        const audio = audioRef.current
+        if (audio) audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10)
+      })
+    } catch {
+      // Some action types are unsupported in certain browsers — ignore
+    }
+    return () => {
+      // Clear handlers so a stale reader never reacts to media keys
+      for (const action of ['play', 'pause', 'previoustrack', 'nexttrack', 'seekbackward', 'seekforward'] as const) {
+        try {
+          ms.setActionHandler(action, null)
+        } catch { /* ignore */ }
+      }
+    }
+  }, [prevTrack, nextTrack])
+
+  // Media Session: metadata for the lock screen / OS media controls
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: tracks[currentTrack]?.name || book.title,
+        artist: book.author,
+        album: book.title,
+      })
+    } catch {
+      // MediaMetadata unavailable — ignore
+    }
+  }, [currentTrack, tracks, book.title, book.author])
+
+  // Media Session: reflect the playback state (play/pause button icon)
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
+  }, [isPlaying])
 
   const seek = useCallback((time: number) => {
     const audio = audioRef.current

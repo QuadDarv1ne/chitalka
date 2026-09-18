@@ -246,6 +246,15 @@ export function PdfReader({ book, onProgress }: Props) {
         userScaleRef.current = true
         setScale((s) => Math.max(0.5, s - 0.2))
       }
+      // Home/End: jump to the first/last page
+      else if (e.key === 'Home') {
+        e.preventDefault()
+        goToPage(1)
+      }
+      else if (e.key === 'End') {
+        e.preventDefault()
+        goToPage(totalPages)
+      }
     }
     const onGotoPage = (e: Event) => {
       const p = (e as CustomEvent<number>).detail

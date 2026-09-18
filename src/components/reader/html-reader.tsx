@@ -202,10 +202,20 @@ export function HtmlReader({ book, onProgress }: Props) {
         if (e.key === ' ' || e.key === 'PageDown') e.preventDefault()
         next()
       }
+      else if (e.key === 'Home') {
+        e.preventDefault()
+        setPage(0)
+        containerRef.current?.scrollTo({ top: 0 })
+      }
+      else if (e.key === 'End') {
+        e.preventDefault()
+        if (totalPages > 0) setPage(alignToSpread(totalPages - 1))
+        containerRef.current?.scrollTo({ top: 0 })
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [prev, next])
+  }, [prev, next, totalPages, alignToSpread])
 
   // Touch swipe
   useEffect(() => {
