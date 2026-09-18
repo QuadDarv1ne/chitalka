@@ -148,6 +148,29 @@ export async function syncBooksFromServer(): Promise<{ updated: number; localOnl
  * Retries with exponential backoff and permanently stops on session
  * expiry (401) instead of hammering the server forever.
  */
+/**
+ * Fields that participate in sync. A book whose sync-relevant fields have not
+ * changed since the last successful push is skipped: with a few hundred books
+ * re-sending everything every minute is a lot of payload for no effect.
+ */
+function syncFingerprint(b: BookRecord): string {
+  return [
+    b.title,
+    b.author,
+    b.format,
+    b.progress ?? 0,
+    b.lastOpenedAt ?? 0,
+    b.cfi ?? '',
+    b.textPosition ?? '',
+    b.pdfPage ?? '',
+    b.cbzPage ?? '',
+    b.audioTrack ?? '',
+    b.audioTime ?? 0,
+    b.rating ?? 0,
+    b.favorite ? 1 : 0,
+  ].join('\u0000')
+}
+
 export function useBookSync(books: BookRecord[]) {
   const { user } = useAuth()
   const lastSyncRef = useRef(0)
@@ -156,6 +179,9 @@ export function useBookSync(books: BookRecord[]) {
   const intervalRef = useRef(BASE_INTERVAL)
   const disabledRef = useRef(false)
   const syncRef = useRef<(force?: boolean) => void>(() => {})
+  // Fingerprints of the books as of the last pushed sync. force=true sends
+  // everything regardless — used for the final flush on unmount/logout.
+  const fingerprintsRef = useRef<Map<string, string> | null>(null)
 
   useEffect(() => {
     booksRef.current = books
@@ -171,13 +197,28 @@ export function useBookSync(books: BookRecord[]) {
       // Throttle: max once per 30 seconds (unless force — final flush on
       // unmount/logout must never be swallowed by the throttle)
       if (!force && now - lastSyncRef.current < MIN_BETWEEN) return
-      lastSyncRef.current = now
 
-      const status = await syncBooksToServer(current)
+      // Only books whose sync-relevant fields changed since the last push.
+      // A failed/aborted sync leaves the map untouched, so the books are
+      // retried on the next tick.
+      const dirty =
+        force || fingerprintsRef.current === null
+          ? current
+          : current.filter((b) => fingerprintsRef.current?.get(b.id) !== syncFingerprint(b))
+      if (dirty.length === 0) return
+
+      lastSyncRef.current = now
+      const status = await syncBooksToServer(dirty)
       if (status === 401) {
         logger.warn('Book sync stopped: session expired (401)')
         disabledRef.current = true
         return
+      }
+
+      // On success remember what was pushed; on failure keep the old map so
+      // the same books are still considered dirty next time.
+      if (status !== null && status < 300) {
+        fingerprintsRef.current = new Map(current.map((b) => [b.id, syncFingerprint(b)]))
       }
 
       // Back off on network errors / server errors, reset on success
@@ -229,8 +270,11 @@ export function useServerBookSync(refresh: () => Promise<void>) {
     if (updated > 0) {
       void refresh()
     }
-    if (updated === 0 && !disabledRef.current) {
-      // Keep pulling periodically
+    // Reschedule unconditionally: progress made on another device arrives
+    // later, so the pull must keep running whether or not this pass found
+    // anything. (Rescheduling only on "nothing new" would stop the loop
+    // right after the first successful pull.)
+    if (!disabledRef.current) {
       timerRef.current = setTimeout(() => void pullRef.current(), BASE_INTERVAL)
     }
   }, [user, refresh])
@@ -242,5 +286,13 @@ export function useServerBookSync(refresh: () => Promise<void>) {
   useEffect(() => {
     if (!user?.emailVerified) return
     void pull()
-  }, [user])
+    return () => {
+      // Clear the pending timer on unmount/logout: a fired timer would
+      // keep the (now stale) pull chain alive after the component is gone.
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [user, pull])
 }

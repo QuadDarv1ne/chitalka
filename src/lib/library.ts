@@ -30,6 +30,13 @@ export interface BookRecord {
    * entries most likely to show a file name instead of a title.
    */
   parsedAt?: number
+  /**
+   * The name of the file the book was imported from. Parsers fall back to
+   * parsing the file name when the file carries no tags, so re-parsing with
+   * the (human-edited) title instead of the original name would produce
+   * garbage — the original name is the only input that reproduces the result.
+   */
+  sourceName?: string
 }
 
 interface LibraryDB extends DBSchema {

@@ -278,6 +278,9 @@ export function Library() {
                 blob,
                 addedAt: Date.now(),
                 parsedAt: Date.now(),
+                // Kept so a later re-parse can fall back to the same file
+                // name the metadata was originally derived from.
+                sourceName: file.name,
                 userId,
               }
               await saveBook(book)
@@ -389,16 +392,28 @@ export function Library() {
         toast.error('Файл книги не найден в хранилище')
         return
       }
-      const asFile = new File([stored.blob], stored.title, { type: stored.blob.type })
+      // Parsers fall back to the file name when the file has no tags, so the
+      // re-parse must see the original name — the current title may already
+      // have been human-edited and is not a parseable file name.
+      const asFile = new File([stored.blob], stored.sourceName ?? stored.title, {
+        type: stored.blob.type,
+      })
       let meta: ParsedMeta
       if (stored.format === 'epub') {
         meta = await parseEpubMeta(stored.blob)
       } else if (stored.format === 'pdf') {
         meta = await parsePdfMeta(asFile)
       } else if (stored.format === 'fb2') {
-        // Stored as converted plain text, so only the original name is left to
-        // read; the text body carries no metadata to recover.
-        meta = await parseFb2Meta(asFile)
+        // FB2 is stored as converted plain text (the original XML is not
+        // kept), so there is nothing in the blob for the parser to read —
+        // say so instead of silently producing the title back from the name.
+        toast.info(
+          'FB2 хранится как извлечённый текст — метаданные не перечитать',
+          {
+            description: 'Чтобы обновить название и обложку, добавьте исходный .fb2 файл заново',
+          },
+        )
+        return
       } else if (stored.format === 'mp3') {
         meta = await parseAudioMeta(asFile)
       } else {

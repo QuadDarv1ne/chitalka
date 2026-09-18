@@ -46,6 +46,25 @@ export async function POST(req: Request) {
     }
 
     let imported = 0
+    const tasks: {
+      bookId: string
+      data: {
+        title: string
+        author: string
+        format: string
+        progress: number
+        lastOpenedAt: Date | null
+        cfi: string | undefined
+        textPosition: number | undefined
+        pdfPage: number | undefined
+        cbzPage: number | undefined
+        audioTrack: number | undefined
+        audioTime: number | undefined
+        rating: number | undefined
+        favorite: boolean | undefined
+      }
+    }[] = []
+
     for (const book of backup.books) {
       if (!book || typeof book !== 'object') continue
       const bookId = typeof book.bookId === 'string' ? book.bookId.slice(0, 200) : ''
@@ -56,42 +75,42 @@ export async function POST(req: Request) {
       const lastOpenedAt = toDate(book.lastOpenedAt)
       if (book.lastOpenedAt !== null && book.lastOpenedAt !== undefined && !lastOpenedAt) continue
 
-      await db.bookMeta.upsert({
-        where: { userId_bookId: { userId: user.id, bookId } },
-        update: {
-          title: clampString(book.title, 500, ''),
-          author: clampString(book.author, 300, ''),
-          format,
-          progress,
-          lastOpenedAt,
-          cfi: typeof book.cfi === 'string' ? book.cfi.slice(0, 2000) : undefined,
-          textPosition: typeof book.textPosition === 'number' ? book.textPosition : undefined,
-          pdfPage: typeof book.pdfPage === 'number' ? book.pdfPage : undefined,
-          cbzPage: typeof book.cbzPage === 'number' ? book.cbzPage : undefined,
-          audioTrack: typeof book.audioTrack === 'number' ? book.audioTrack : undefined,
-          audioTime: typeof book.audioTime === 'number' ? book.audioTime : undefined,
-          rating: typeof book.rating === 'number' ? Math.max(1, Math.min(5, book.rating)) : undefined,
-          favorite: typeof book.favorite === 'boolean' ? book.favorite : undefined,
-        },
-        create: {
-          userId: user.id,
-          bookId,
-          title: clampString(book.title, 500, ''),
-          author: clampString(book.author, 300, ''),
-          format,
-          progress,
-          lastOpenedAt,
-          cfi: typeof book.cfi === 'string' ? book.cfi.slice(0, 2000) : undefined,
-          textPosition: typeof book.textPosition === 'number' ? book.textPosition : undefined,
-          pdfPage: typeof book.pdfPage === 'number' ? book.pdfPage : undefined,
-          cbzPage: typeof book.cbzPage === 'number' ? book.cbzPage : undefined,
-          audioTrack: typeof book.audioTrack === 'number' ? book.audioTrack : undefined,
-          audioTime: typeof book.audioTime === 'number' ? book.audioTime : undefined,
-          rating: typeof book.rating === 'number' ? Math.max(1, Math.min(5, book.rating)) : undefined,
-          favorite: typeof book.favorite === 'boolean' ? book.favorite : undefined,
-        },
-      })
-      imported++
+      const data = {
+        title: clampString(book.title, 500, ''),
+        author: clampString(book.author, 300, ''),
+        format,
+        progress,
+        lastOpenedAt,
+        cfi: typeof book.cfi === 'string' ? book.cfi.slice(0, 2000) : undefined,
+        textPosition: typeof book.textPosition === 'number' ? book.textPosition : undefined,
+        pdfPage: typeof book.pdfPage === 'number' ? book.pdfPage : undefined,
+        cbzPage: typeof book.cbzPage === 'number' ? book.cbzPage : undefined,
+        audioTrack: typeof book.audioTrack === 'number' ? book.audioTrack : undefined,
+        audioTime: typeof book.audioTime === 'number' ? book.audioTime : undefined,
+        rating: typeof book.rating === 'number' ? Math.max(1, Math.min(5, book.rating)) : undefined,
+        favorite: typeof book.favorite === 'boolean' ? book.favorite : undefined,
+      }
+      tasks.push({ bookId, data })
+    }
+
+    // Run in bounded batches — SQLite is single-writer, avoid 5000 queued
+    // writes (same pattern as the books/sync route). A book that fails to
+    // write is skipped, not fatal for the whole import.
+    const BATCH = 50
+    for (let i = 0; i < tasks.length; i += BATCH) {
+      const results = await Promise.all(
+        tasks.slice(i, i + BATCH).map(({ bookId, data }) =>
+          db.bookMeta
+            .upsert({
+              where: { userId_bookId: { userId: user.id, bookId } },
+              update: data,
+              create: { userId: user.id, bookId, ...data },
+            })
+            .then(() => 1)
+            .catch(() => 0),
+        ),
+      )
+      imported += results.reduce<number>((sum, r) => sum + r, 0)
     }
 
     // Restore settings if provided
