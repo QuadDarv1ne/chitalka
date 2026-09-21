@@ -565,10 +565,10 @@ export function TxtReader({ book, onProgress }: Props) {
       ) : (
         <div
           ref={articleRef}
-          className={`mx-auto flex items-stretch py-10 ${
+          className={`mx-auto flex items-stretch py-8 sm:py-12 ${
             twoPage
               ? 'max-w-[min(140rem,99vw)] gap-0'
-              : 'max-w-[min(100rem,97vw)]'
+              : 'max-w-[min(100rem,94vw)]'
           }`}
           style={{
             paddingLeft: marginX,
@@ -579,14 +579,14 @@ export function TxtReader({ book, onProgress }: Props) {
           }}
         >
           <article
-            className="flex-1 min-w-0 px-2 sm:px-4"
+            className="flex-1 min-w-0 rounded-sm px-4 py-2 shadow-sm sm:px-8 sm:py-4"
             style={readerStyle}
           >
             {renderPageBody(currentPage)}
           </article>
           {twoPage && rightPage && (
             <article
-              className="flex-1 min-w-0 px-2 sm:px-4 border-l"
+              className="flex-1 min-w-0 border-l px-4 py-2 sm:px-8 sm:py-4"
               style={{ ...readerStyle, borderColor: 'color-mix(in srgb, var(--reader-fg) 10%, transparent)' }}
             >
               {renderPageBody(rightPage)}

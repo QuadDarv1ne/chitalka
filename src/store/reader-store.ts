@@ -138,7 +138,7 @@ const defaultSettings: ReaderSettings = {
   fontSize: 18,
   lineHeight: 1.7,
   margin: 3,
-  columnWidth: 97,
+  columnWidth: 72,
   textAlign: 'justify',
   hyphens: true,
   twoPage: false,

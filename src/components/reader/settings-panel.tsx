@@ -17,6 +17,7 @@ import {
   Calendar,
   BookOpen,
   BookCopy,
+  RotateCcw,
 } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -61,8 +62,78 @@ export function ReaderSettingsPanel() {
     { key: 'mono', label: 'Моноширинный', sample: 'Aa' },
   ]
 
+  const presets = [
+    {
+      key: 'comfortable',
+      label: 'Комфортно',
+      description: '18 px · 1.7 · 72%',
+      settings: { fontSize: 18, lineHeight: 1.7, columnWidth: 72, margin: 3 },
+    },
+    {
+      key: 'compact',
+      label: 'Компактно',
+      description: '16 px · 1.5 · 82%',
+      settings: { fontSize: 16, lineHeight: 1.5, columnWidth: 82, margin: 2 },
+    },
+    {
+      key: 'large',
+      label: 'Крупный текст',
+      description: '22 px · 1.9 · 68%',
+      settings: { fontSize: 22, lineHeight: 1.9, columnWidth: 68, margin: 3 },
+    },
+  ] as const
+
   return (
     <div className="flex flex-col gap-6 px-4 pb-8">
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              Быстрый профиль
+            </Label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Подберите ритм чтения одним нажатием
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="shrink-0 gap-1.5 text-xs"
+            onClick={() => updateSettings({
+              theme: 'light',
+              fontFamily: 'serif',
+              fontSize: 18,
+              lineHeight: 1.7,
+              margin: 3,
+              columnWidth: 72,
+              textAlign: 'justify',
+              hyphens: true,
+              twoPage: false,
+            })}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Сбросить
+          </Button>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {presets.map((preset) => (
+            <Button
+              key={preset.key}
+              variant="outline"
+              className="h-auto min-h-16 flex-col items-start gap-1 px-3 py-2 text-left"
+              onClick={() => updateSettings(preset.settings)}
+            >
+              <span className="text-sm font-medium">{preset.label}</span>
+              <span className="text-[11px] font-normal text-muted-foreground">
+                {preset.description}
+              </span>
+            </Button>
+          ))}
+        </div>
+      </section>
+
+      <Separator />
+
       {/* Theme */}
       <section className="space-y-3">
         <Label className="text-xs uppercase tracking-wide text-muted-foreground">
