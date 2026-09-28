@@ -24,6 +24,8 @@ jobs:
 
       - run: bunx tsc --noEmit
 
+      - run: bun run test
+
       - run: bun run build
         env:
           JWT_SECRET: ci-test-secret-do-not-use-in-production
