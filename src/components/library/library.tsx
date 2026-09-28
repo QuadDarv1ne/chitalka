@@ -955,13 +955,13 @@ export function Library() {
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5">
-                  <LibraryIcon className="h-4 w-4" /> {stats.total} книг
+                  <LibraryIcon className="h-4 w-4" /> {formatCount(stats.total, ['книга', 'книги', 'книг'])}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <BookMarked className="h-4 w-4" /> {stats.reading} в чтении
+                  <BookMarked className="h-4 w-4" /> {formatCount(stats.reading, ['книга', 'книги', 'книг'])} в чтении
                 </span>
                 <span className="hidden md:flex items-center gap-1.5">
-                  <FileType className="h-4 w-4" /> {stats.highlights} выделений
+                  <FileType className="h-4 w-4" /> {formatCount(stats.highlights, ['выделение', 'выделения', 'выделений'])}
                 </span>
               </div>
               {/* Removable chips: every active constraint is visible and
