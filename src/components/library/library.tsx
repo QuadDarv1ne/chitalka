@@ -89,6 +89,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -116,6 +118,19 @@ const FORMAT_BADGES: Record<string, { label: string; color: string }> = {
 }
 
 const isFinished = (progress?: number) => progress !== undefined && progress >= 0.99
+
+// Russian plural agreement: 1 книга, 2 книги, 5 книг.
+function plural(n: number, forms: [string, string, string]): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return forms[0]
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1]
+  return forms[2]
+}
+
+function formatCount(n: number, forms: [string, string, string]): string {
+  return `${n} ${plural(n, forms)}`
+}
 
 export function Library() {
   const [books, setBooks] = useState<BookRecord[]>([])
@@ -174,6 +189,23 @@ export function Library() {
 
   // When user logs in, reassign anonymous books to their account (one-time)
   const reassignedRef = useRef(false)
+
+  // "/" focuses the search field from anywhere (unless already typing in a field)
+  const searchRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return
+      const el = document.activeElement as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+      if (!searchRef.current) return
+      e.preventDefault()
+      searchRef.current.focus()
+      searchRef.current.select()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   useEffect(() => {
     if (!user) {
       // Reset so the next login reassigns books imported while logged out
@@ -512,11 +544,46 @@ export function Library() {
 
   const stats = {
     total: books.length,
+    // "В чтении" = books actually started but not finished. Counting every
+    // ever-opened book (the previous `recent`) overstated real progress.
+    reading: books.filter((b) => (b.progress ?? 0) > 0 && !isFinished(b.progress)).length,
     recent: books.filter((b) => b.lastOpenedAt).length,
     totalPages: sessions.reduce((s, sess) => s + sess.pages, 0),
     totalMinutes: sessions.reduce((s, sess) => s + sess.minutes, 0),
     highlights: highlights.length,
   }
+
+  // Active search constraints, each removable on its own. Also drives the
+  // "filters on" indicator of the filter button and the empty-state reset.
+  const activeFilters = useMemo(() => {
+    const list: { key: string; label: string; clear: () => void }[] = []
+    if (search.trim())
+      list.push({ key: 'search', label: `Поиск: «${search.trim()}»`, clear: () => setSearch('') })
+    if (formatFilter !== 'all')
+      list.push({
+        key: 'format',
+        label: `Формат: ${formatFilter.toUpperCase()}`,
+        clear: () => setFormatFilter('all'),
+      })
+    if (statusFilter !== 'all')
+      list.push({
+        key: 'status',
+        label: statusFilter === 'reading' ? 'В процессе чтения' : 'Завершённые',
+        clear: () => setStatusFilter('all'),
+      })
+    if (favoriteFilter !== 'all')
+      list.push({ key: 'favorite', label: 'Только избранные', clear: () => setFavoriteFilter('all') })
+    return list
+  }, [search, formatFilter, statusFilter, favoriteFilter])
+
+  const clearAllFilters = useCallback(() => {
+    setSearch('')
+    setFormatFilter('all')
+    setStatusFilter('all')
+    setFavoriteFilter('all')
+  }, [])
+
+  const filtersOn = activeFilters.length > 0
 
   // Daily reading goal widget (header): today's minutes vs the goal.
   const todayDate = localDateString(new Date())
@@ -622,18 +689,32 @@ export function Library() {
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
+                ref={searchRef}
                 placeholder="Поиск по названию или автору..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 pr-9"
+                onKeyDown={(e) => {
+                  // Esc clears the query but keeps the field focused
+                  if (e.key === 'Escape' && search) {
+                    e.stopPropagation()
+                    setSearch('')
+                  }
+                }}
+                className="pl-9 pr-16"
+                aria-label="Поиск по библиотеке"
               />
-              {search && (
+              {search ? (
                 <button
                   onClick={() => setSearch('')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Очистить поиск"
                 >
                   <X className="h-4 w-4" />
                 </button>
+              ) : (
+                <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground sm:block">
+                  /
+                </kbd>
               )}
             </div>
 
@@ -689,56 +770,83 @@ export function Library() {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="relative"
+                  aria-label={
+                    filtersOn ? `Фильтры (${activeFilters.length} активно)` : 'Фильтры и сортировка'
+                  }
+                >
                   <SortDesc className="h-4 w-4" />
+                  {filtersOn && (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                      {activeFilters.length}
+                    </span>
+                  )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>Сортировка</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => setSort('recent')}>
-                  Недавно открытые
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSort('added')}>
-                  По дате добавления
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSort('title')}>
-                  По названию
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSort('progress')}>
-                  По прогрессу чтения
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSort('rating')}>
-                  По оценке
-                </DropdownMenuItem>
+                <DropdownMenuRadioGroup
+                  value={sort}
+                  onValueChange={(v) => setSort(v as SortKey)}
+                >
+                  <DropdownMenuRadioItem value="recent">
+                    Недавно открытые
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="added">
+                    По дате добавления
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="title">
+                    По названию
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="progress">
+                    По прогрессу чтения
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="rating">
+                    По оценке
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>Формат</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => setFormatFilter('all')}>
-                  Все форматы
-                </DropdownMenuItem>
-                {(['epub', 'pdf', 'fb2', 'txt', 'md', 'html', 'mp3', 'cbz'] as FormatFilter[]).map((f) => (
-                  <DropdownMenuItem key={f} onClick={() => setFormatFilter(f)}>
-                    {f.toUpperCase()} {formatCounts[f] ? `(${formatCounts[f]})` : ''}
-                  </DropdownMenuItem>
-                ))}
+                <DropdownMenuRadioGroup
+                  value={formatFilter}
+                  onValueChange={(v) => setFormatFilter(v as FormatFilter)}
+                >
+                  <DropdownMenuRadioItem value="all">
+                    Все форматы ({books.length})
+                  </DropdownMenuRadioItem>
+                  {(['epub', 'pdf', 'fb2', 'txt', 'md', 'html', 'mp3', 'cbz'] as FormatFilter[]).map(
+                    (f) =>
+                      formatCounts[f] ? (
+                        <DropdownMenuRadioItem key={f} value={f}>
+                          {f.toUpperCase()} ({formatCounts[f]})
+                        </DropdownMenuRadioItem>
+                      ) : null,
+                  )}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Избранное</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={favoriteFilter}
+                  onValueChange={(v) => setFavoriteFilter(v as FavoriteFilter)}
+                >
+                  <DropdownMenuRadioItem value="all">Все книги</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="favorites">
+                    <Heart className="h-4 w-4 mr-2" /> Избранные
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>Статус</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => setFavoriteFilter('all')}>
-                  Все книги
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setFavoriteFilter('favorites')}>
-                  <Heart className="h-4 w-4 mr-2" /> Избранные
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Статус</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => setStatusFilter('all')}>
-                  Все книги
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter('reading')}>
-                  В процессе чтения
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter('finished')}>
-                  Завершённые
-                </DropdownMenuItem>
+                <DropdownMenuRadioGroup
+                  value={statusFilter}
+                  onValueChange={(v) => setStatusFilter(v as StatusFilter)}
+                >
+                  <DropdownMenuRadioItem value="all">Все книги</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="reading">В процессе чтения</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="finished">Завершённые</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => restoreInput.current?.click()}
@@ -820,6 +928,8 @@ export function Library() {
           <EmptyState
             hasBooks={books.length > 0}
             onImport={() => fileInput.current?.click()}
+            onClearFilters={clearAllFilters}
+            filterCount={activeFilters.length}
           />
         ) : (
           <>
@@ -848,28 +958,40 @@ export function Library() {
                   <LibraryIcon className="h-4 w-4" /> {stats.total} книг
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <BookMarked className="h-4 w-4" /> {stats.recent} в чтении
+                  <BookMarked className="h-4 w-4" /> {stats.reading} в чтении
                 </span>
                 <span className="hidden md:flex items-center gap-1.5">
                   <FileType className="h-4 w-4" /> {stats.highlights} выделений
                 </span>
               </div>
-              {(formatFilter !== 'all' || statusFilter !== 'all') && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setFormatFilter('all')
-                    setStatusFilter('all')
-                  }}
-                  className="gap-1 text-xs"
-                >
-                  <X className="h-3 w-3" />
-                  {formatFilter !== 'all' && `Формат: ${formatFilter.toUpperCase()}`}
-                  {formatFilter !== 'all' && statusFilter !== 'all' && ' · '}
-                  {statusFilter === 'reading' && 'В процессе'}
-                  {statusFilter === 'finished' && 'Завершённые'}
-                </Button>
+              {/* Removable chips: every active constraint is visible and
+                  individually clearable, so a stale filter never hides the
+                  library silently. */}
+              {activeFilters.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {activeFilters.map((f) => (
+                    <button
+                      key={f.key}
+                      onClick={f.clear}
+                      className="inline-flex items-center gap-1 rounded-full border bg-muted px-2.5 py-1 text-xs text-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring outline-none"
+                      aria-label={`Сбросить фильтр: ${f.label}`}
+                      title="Сбросить фильтр"
+                    >
+                      {f.label}
+                      <X className="h-3 w-3 opacity-60" />
+                    </button>
+                  ))}
+                  {activeFilters.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearAllFilters}
+                      className="h-6 px-2 text-xs text-muted-foreground"
+                    >
+                      Сбросить все
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
@@ -1184,7 +1306,17 @@ const BookCard = memo(function BookCard({
   )
 })
 
-const EmptyState = memo(function EmptyState({ hasBooks, onImport }: { hasBooks: boolean; onImport: () => void }) {
+const EmptyState = memo(function EmptyState({
+  hasBooks,
+  onImport,
+  onClearFilters,
+  filterCount,
+}: {
+  hasBooks: boolean
+  onImport: () => void
+  onClearFilters: () => void
+  filterCount: number
+}) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted mb-6">
@@ -1195,10 +1327,20 @@ const EmptyState = memo(function EmptyState({ hasBooks, onImport }: { hasBooks: 
       </h2>
       <p className="text-muted-foreground max-w-md mb-6">
         {hasBooks
-          ? 'Попробуйте изменить поисковый запрос или сбросить фильтры.'
+          ? filterCount > 0
+            ? `Сейчас активно ${formatCount(filterCount, ['фильтр', 'фильтра', 'фильтров'])}. Отключите их, чтобы снова увидеть все книги.`
+            : 'Попробуйте изменить поисковый запрос.'
           : 'Добавьте свои книги в форматах EPUB, PDF, TXT, Markdown или HTML. Все файлы сохраняются локально в браузере.'}
       </p>
-      {!hasBooks && (
+      {/* Both empty states offer the way out as an action, not just advice —
+          otherwise a filtered-to-zero library is a dead end. */}
+      {hasBooks ? (
+        filterCount > 0 && (
+          <Button onClick={onClearFilters} size="lg" variant="outline" className="gap-2">
+            <RotateCcw className="h-5 w-5" /> Сбросить {formatCount(filterCount, ['фильтр', 'фильтра', 'фильтров'])}
+          </Button>
+        )
+      ) : (
         <Button onClick={onImport} size="lg" className="gap-2">
           <Upload className="h-5 w-5" /> Добавить первую книгу
         </Button>

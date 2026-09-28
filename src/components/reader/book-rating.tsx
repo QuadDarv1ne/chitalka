@@ -12,13 +12,26 @@ interface Props {
 
 export function BookRating({ bookId, currentRating = 0 }: Props) {
   const [hoverRating, setHoverRating] = useState(0)
+  // The parent keeps the book record as it was on load, so the prop goes stale
+  // after a click. Mirror it locally (re-derived during render when the book or
+  // the stored rating changes) to keep the stars in sync with what was saved.
+  const [rating, setRating] = useState(currentRating)
+  const [prevKey, setPrevKey] = useState(`${bookId}:${currentRating}`)
+  const syncKey = `${bookId}:${currentRating}`
+  if (syncKey !== prevKey) {
+    setPrevKey(syncKey)
+    setRating(currentRating)
+  }
 
   const handleRate = useCallback(
-    async (rating: number) => {
-      await updateBook(bookId, { rating }).catch(() => {})
-      toast.success(rating > 0 ? `Оценка: ${rating} из 5` : 'Рейтинг удалён')
+    async (star: number) => {
+      // Clicking the current value clears the rating, like in the details dialog
+      const next = star === rating ? 0 : star
+      setRating(next)
+      await updateBook(bookId, { rating: next }).catch(() => {})
+      toast.success(next > 0 ? `Оценка: ${next} из 5` : 'Рейтинг удалён')
     },
-    [bookId],
+    [bookId, rating],
   )
 
   return (
@@ -29,12 +42,13 @@ export function BookRating({ bookId, currentRating = 0 }: Props) {
           onClick={() => handleRate(star)}
           onMouseEnter={() => setHoverRating(star)}
           onMouseLeave={() => setHoverRating(0)}
-          className="transition-transform hover:scale-110 focus:outline-none"
-          aria-label={`Оценить на ${star} из 5`}
+          className="rounded transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-ring outline-none"
+          aria-label={star === rating ? `Убрать оценку (${rating} из 5)` : `Оценить на ${star} из 5`}
+          title={star === rating ? 'Убрать оценку' : `Оценить на ${star} из 5`}
         >
           <Star
             className={`h-5 w-5 ${
-              star <= (hoverRating || currentRating)
+              star <= (hoverRating || rating)
                 ? 'fill-amber-400 text-amber-400'
                 : 'text-muted-foreground/40'
             }`}
