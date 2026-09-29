@@ -131,6 +131,20 @@ export function CbzReader({ book, onProgress }: Props) {
     }
   }, [images.length])
 
+  // Seek bar in the reader footer: jump to a percent of the page list.
+  useEffect(() => {
+    const onGotoPercent = (e: Event) => {
+      const p = (e as CustomEvent<number>).detail
+      if (typeof p !== 'number' || !Number.isFinite(p) || images.length === 0) return
+      const target = Math.round(Math.max(0, Math.min(1, p)) * (images.length - 1))
+      setCurrentIndex(Math.max(0, Math.min(target, images.length - 1)))
+    }
+    window.addEventListener('reader:goto-percent', onGotoPercent)
+    return () => {
+      window.removeEventListener('reader:goto-percent', onGotoPercent)
+    }
+  }, [images.length])
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
