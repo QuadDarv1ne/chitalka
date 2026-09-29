@@ -209,6 +209,21 @@ export function Reader() {
     window.dispatchEvent(new CustomEvent('reader:goto-percent', { detail: p }))
   }, [])
 
+  // Keyboard seeking on the slider: arrows step by 5% (Shift — by 25%),
+  // Home/End jump to the book edges. stopPropagation keeps the reader's own
+  // ArrowLeft/Right page-flip handlers from firing at the same time.
+  const seekByStep = useCallback(
+    (delta: number) => {
+      // Compute from the rendered progress (dep) rather than inside the
+      // setProgress updater — updaters must stay pure because React may
+      // call them twice in StrictMode, which would double-dispatch the seek.
+      const next = Math.min(1, Math.max(0, Math.round((progress + delta) * 100) / 100))
+      setProgress(next)
+      window.dispatchEvent(new CustomEvent('reader:goto-percent', { detail: next }))
+    },
+    [progress],
+  )
+
   // Global keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -280,7 +295,9 @@ export function Reader() {
     }
     window.addEventListener('reader:add-bookmark', onAddBookmark)
     return () => window.removeEventListener('reader:add-bookmark', onAddBookmark)
-  }, [book, currentCfi, currentTextPosition, currentPdfPage])
+    // currentCbzPage must be a dependency too — omitting it let a bookmark
+    // capture a stale CBZ page when Ctrl+B was pressed right after a flip.
+  }, [book, currentCfi, currentTextPosition, currentPdfPage, currentCbzPage])
 
   if (loading) {
     return (
@@ -465,12 +482,33 @@ export function Reader() {
         </Button>
         <div
           ref={progressBarRef}
-          className="flex-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden cursor-pointer touch-none"
+          className="flex-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden cursor-pointer touch-none outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
           role="slider"
           aria-label="Позиция в книге"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(progress * 100)}
+          tabIndex={0}
+          onKeyDown={(e) => {
+            // Arrow-step seeking on the slider itself. stopPropagation keeps
+            // the reader's own ArrowLeft/Right page-flip shortcuts from
+            // firing while the slider has focus.
+            if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+              e.preventDefault()
+              e.stopPropagation()
+              seekByStep(e.shiftKey ? 0.25 : 0.05)
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+              e.preventDefault()
+              e.stopPropagation()
+              seekByStep(e.shiftKey ? -0.25 : -0.05)
+            } else if (e.key === 'Home') {
+              e.preventDefault()
+              seekByStep(-1)
+            } else if (e.key === 'End') {
+              e.preventDefault()
+              seekByStep(1)
+            }
+          }}
           onPointerDown={(e) => {
             // Capture the pointer so dragging outside the bar still works
             e.currentTarget.setPointerCapture(e.pointerId)

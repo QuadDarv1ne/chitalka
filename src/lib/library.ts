@@ -56,18 +56,18 @@ function getDB() {
     throw new Error('IndexedDB only available in browser')
   }
   if (!dbPromise) {
-    // Limit retry attempts to avoid infinite loops when IndexedDB is
-    // persistently unavailable (quota exceeded, private mode, etc.).
-    openAttempts++
-    if (openAttempts > MAX_OPEN_ATTEMPTS) {
+    // Only CONSECUTIVE open failures count toward the retry cap, and the
+    // counter resets on every successful open. The previous logic
+    // incremented on every cold getDB() call (even ones that succeeded)
+    // and double-counted on failure, so a single transient error (upgrade
+    // blocked once, quota hiccup, private-mode SecurityError) could poison
+    // the whole library for the rest of the page session.
+    if (openAttempts >= MAX_OPEN_ATTEMPTS) {
       const err = new Error('IndexedDB: max open attempts exceeded')
       logger.error('IndexedDB open failed after retries', err)
       throw err
     }
 
-    // Reset on failure so a transient open error (blocked upgrade, quota,
-    // private-mode SecurityError) doesn't poison every later call until a
-    // page reload — the next getDB() attempt starts a fresh open.
     dbPromise = openDB<LibraryDB>('reader-library', 4, {
       upgrade(db, oldVersion, _newVersion, transaction) {
         if (oldVersion < 1) {
@@ -94,12 +94,17 @@ function getDB() {
           }
         }
       },
-    }).catch((e) => {
-      dbPromise = null
-      openAttempts++
-      logger.warn('IndexedDB open failed (attempt', openAttempts, ')', e)
-      throw e
     })
+      .then((db) => {
+        openAttempts = 0
+        return db
+      })
+      .catch((e) => {
+        dbPromise = null
+        openAttempts++
+        logger.warn('IndexedDB open failed (attempt', openAttempts, ')', e)
+        throw e
+      })
   }
   return dbPromise
 }
@@ -238,8 +243,10 @@ export async function toggleFavorite(bookId: string): Promise<boolean> {
   const db = await getDB()
   const book = await db.get('books', bookId)
   if (!book) return false
-  
+
   const newFavorite = !book.favorite
-  await db.put('books', { ...book, favorite: newFavorite })
+  // Route through the write queue so a queued updateBook (e.g. a page turn)
+  // cannot persist a stale snapshot on top of this toggle.
+  await updateBook(bookId, { favorite: newFavorite })
   return newFavorite
 }
