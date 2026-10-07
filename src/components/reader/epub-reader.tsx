@@ -319,7 +319,7 @@ export const EpubReader = memo(function EpubReader({ book, onProgress }: Props) 
 // TTS: extract the text of the current viewport via CFI range.
   const getCurrentText = useCallback((): string => {
     const rendition = renditionRef.current
-    if (!book || !rendition) return ''
+    if (!bookRef.current || !rendition) return ''
     try {
       const loc = rendition.currentLocation() as any
       // currentLocation() returns { start, end, atStart, atEnd } — the CFI

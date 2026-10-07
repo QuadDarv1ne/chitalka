@@ -43,6 +43,7 @@ export async function GET(
     else if (lower.endsWith('.fb2')) contentType = 'application/x-fictionbook+xml'
     else if (lower.endsWith('.html') || lower.endsWith('.htm')) contentType = 'text/html'
     else if (lower.endsWith('.md')) contentType = 'text/markdown'
+    else if (lower.endsWith('.cbz')) contentType = 'application/vnd.comicbook+zip'
 
     // Stream instead of buffering: audiobook archives run past 100 MB, and a
     // readFileSync of each request would hold the whole file in memory.

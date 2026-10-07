@@ -1,6 +1,5 @@
 'use client'
 
-import type { BookRecord } from '@/lib/library'
 import { initPdfWorker, pdfAssetOptions } from '@/lib/pdf-worker'
 import { decodeTextBytes } from '@/lib/text-encoding'
 import { readFirstEntryHead, unzip } from '@/lib/zip-utils'
@@ -13,25 +12,14 @@ import {
 import { scanFb2Meta } from '@/lib/fb2-scan'
 import { logger } from '@/lib/logger'
 
+export { detectFormat } from '@/lib/format'
+
 export interface ParsedBook {
   title: string
   author: string
   cover?: string
   description?: string
   format: 'epub' | 'txt' | 'md' | 'html' | 'pdf' | 'fb2' | 'mp3' | 'cbz'
-}
-
-export function detectFormat(filename: string): BookRecord['format'] | null {
-  const lower = filename.toLowerCase()
-  if (lower.endsWith('.epub')) return 'epub'
-  if (lower.endsWith('.pdf')) return 'pdf'
-  if (lower.endsWith('.fb2')) return 'fb2'
-  if (lower.endsWith('.md')) return 'md'
-  if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'html'
-  if (lower.endsWith('.txt')) return 'txt'
-  if (lower.endsWith('.mp3') || lower.endsWith('.mp3.zip')) return 'mp3'
-  if (lower.endsWith('.cbz')) return 'cbz'
-  return null
 }
 
 /**

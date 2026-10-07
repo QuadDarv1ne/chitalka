@@ -66,10 +66,10 @@ export function AudioReader({ book, onProgress }: Props) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const trackRef = useRef(currentTrack)
   const currentTrackRef = useRef(currentTrack)
-  // eslint-disable-next-line react-hooks/refs
+   
   currentTrackRef.current = currentTrack
   const onProgressRef = useRef(onProgress)
-  // eslint-disable-next-line react-hooks/refs
+   
   onProgressRef.current = onProgress
   const playingRef = useRef(false)
   const autoAdvanceRef = useRef(false)
@@ -94,7 +94,7 @@ export function AudioReader({ book, onProgress }: Props) {
     let cancelled = false
     const revoked: string[] = []
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setLoading(true)
     ;(async () => {
       try {

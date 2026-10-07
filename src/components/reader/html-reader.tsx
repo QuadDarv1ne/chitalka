@@ -47,7 +47,7 @@ export function HtmlReader({ book, onProgress }: Props) {
   // Load HTML content
   useEffect(() => {
     let cancelled = false
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setLoading(true)
     decodeTextBlob(book.blob)
       .then((text) => {
@@ -107,7 +107,7 @@ export function HtmlReader({ book, onProgress }: Props) {
     if (totalPages === 0 || positionRestoredRef.current) return
     if (book.textPosition) {
       positionRestoredRef.current = true
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setPage(alignToSpread(findPageForPosition(book.textPosition)))
     }
   }, [totalPages, book.textPosition, findPageForPosition, alignToSpread])
@@ -116,7 +116,7 @@ export function HtmlReader({ book, onProgress }: Props) {
   // may exceed the page count for a different pagination)
   useEffect(() => {
     if (totalPages > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setPage((p) => alignToSpread(Math.max(0, Math.min(p, totalPages - 1))))
     }
   }, [totalPages, alignToSpread])

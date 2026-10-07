@@ -88,7 +88,7 @@ export function CollectionImport({ open, onOpenChange, userId, onImported }: Pro
 
   useEffect(() => {
     if (open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setSearch('')
       loadManifest()
     }

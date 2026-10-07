@@ -47,7 +47,7 @@ export function SearchDialog({ book }: Props) {
   // Monotonic counter: stale (out-of-order) search results are discarded
   const searchSeqRef = useRef(0)
   const openRef = useRef(open)
-  // eslint-disable-next-line react-hooks/refs
+   
   openRef.current = open
 
   // Invalidate in-flight searches when the component unmounts (e.g. the
@@ -63,7 +63,7 @@ export function SearchDialog({ book }: Props) {
     if (!open) return
     let cancelled = false
     if (book.format === 'txt' || book.format === 'md' || book.format === 'fb2' || book.format === 'html') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setTextLoaded(false)
       decodeTextBlob(book.blob)
         .then((text) => {
