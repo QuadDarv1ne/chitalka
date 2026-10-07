@@ -191,7 +191,6 @@ export function Library() {
   useServerBookSync(refresh)
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh()
   }, [refresh])
 
@@ -544,7 +543,8 @@ export function Library() {
     .filter(
       (b) =>
         b.title.toLowerCase().includes(search.toLowerCase()) ||
-        b.author.toLowerCase().includes(search.toLowerCase()),
+        b.author.toLowerCase().includes(search.toLowerCase()) ||
+        (b.tags ?? []).some((t) => t.toLowerCase().includes(search.toLowerCase())),
     )
     .sort((a, b) => {
       if (sort === 'title') return a.title.localeCompare(b.title, 'ru')
@@ -688,7 +688,7 @@ export function Library() {
       </AnimatePresence>
 
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/60">
         <div className="container mx-auto flex h-16 items-center gap-2 md:gap-4 px-4 md:px-8">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">

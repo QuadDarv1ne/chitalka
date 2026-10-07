@@ -19,6 +19,7 @@ export interface BackupData {
     description?: string
     rating?: number
     favorite?: boolean
+    tags?: string[]
   }>
   settings: ReaderSettings
   bookmarks: Bookmark[]
@@ -169,6 +170,7 @@ export async function exportLibraryBackup(
     description: b.description,
     rating: b.rating,
     favorite: b.favorite,
+    tags: b.tags,
   }))
   const backup = {
     version: 3,
