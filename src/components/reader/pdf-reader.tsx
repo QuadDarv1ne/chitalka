@@ -196,7 +196,6 @@ export function PdfReader({ book, onProgress }: Props) {
     // (e.g. page 4) showed spread 4-5 and made page 3 unreachable.
     // Align to an odd left page when entering spread mode.
     setPage((p) => (settings.twoPage ? alignToSpread(p) : p))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.twoPage])
 
   const prev = useCallback(() => {

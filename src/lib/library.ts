@@ -37,13 +37,14 @@ export interface BookRecord {
    * garbage — the original name is the only input that reproduces the result.
    */
   sourceName?: string
+  tags?: string[] // user-defined tags for organizing the library
 }
 
 interface LibraryDB extends DBSchema {
   books: {
     key: string
     value: BookRecord
-    indexes: { 'by-addedAt': number; 'by-lastOpenedAt': number; 'by-userId': string; 'by-favorite': number }
+    indexes: { 'by-addedAt': number; 'by-lastOpenedAt': number; 'by-userId': string; 'by-favorite': number; 'by-tags': string }
   }
 }
 
@@ -68,7 +69,7 @@ function getDB() {
       throw err
     }
 
-    dbPromise = openDB<LibraryDB>('reader-library', 4, {
+    dbPromise = openDB<LibraryDB>('reader-library', 5, {
       upgrade(db, oldVersion, _newVersion, transaction) {
         if (oldVersion < 1) {
           const store = db.createObjectStore('books', { keyPath: 'id' })
@@ -91,6 +92,13 @@ function getDB() {
           const store = transaction.objectStore('books')
           if (!store.indexNames.contains('by-favorite')) {
             store.createIndex('by-favorite', 'favorite')
+          }
+        }
+        if (oldVersion === 4) {
+          // v4 → v5: add tags index
+          const store = transaction.objectStore('books')
+          if (!store.indexNames.contains('by-tags')) {
+            store.createIndex('by-tags', 'tags', { multiEntry: true })
           }
         }
       },
@@ -249,4 +257,48 @@ export async function toggleFavorite(bookId: string): Promise<boolean> {
   // cannot persist a stale snapshot on top of this toggle.
   await updateBook(bookId, { favorite: newFavorite })
   return newFavorite
+}
+
+/**
+ * Add a tag to a book. Creates the book if it doesn't exist.
+ */
+export async function addTag(bookId: string, tag: string): Promise<void> {
+  const tags = (await getBook(bookId))?.tags ?? []
+  if (!tags.includes(tag)) {
+    tags.push(tag)
+    await updateBook(bookId, { tags })
+  }
+}
+
+/**
+ * Remove a tag from a book.
+ */
+export async function removeTag(bookId: string, tag: string): Promise<void> {
+  const book = await getBook(bookId)
+  if (!book?.tags) return
+  const tags = book.tags.filter((t) => t !== tag)
+  await updateBook(bookId, { tags })
+}
+
+/**
+ * Set the complete list of tags for a book.
+ */
+export async function setTags(bookId: string, tags: string[]): Promise<void> {
+  await updateBook(bookId, { tags })
+}
+
+/**
+ * Get all unique tags across a user's library.
+ */
+export async function getAllTags(userId?: string | null): Promise<string[]> {
+  const books = await getAllBooks(userId)
+  const tagSet = new Set<string>()
+  for (const book of books) {
+    if (book.tags) {
+      for (const tag of book.tags) {
+        tagSet.add(tag)
+      }
+    }
+  }
+  return Array.from(tagSet).sort()
 }

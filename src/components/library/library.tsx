@@ -47,6 +47,7 @@ import {
   Pencil,
   RefreshCw,
   AlertTriangle,
+  Plus,
 } from 'lucide-react'
 import {
   getAllBooks,
@@ -57,6 +58,7 @@ import {
   reassignBooksToUser,
   hashFileHead,
   toggleFavorite,
+  getAllTags,
   type BookRecord,
 } from '@/lib/library'
 import {
@@ -140,6 +142,8 @@ export function Library() {
   const [formatFilter, setFormatFilter] = useState<FormatFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [favoriteFilter, setFavoriteFilter] = useState<FavoriteFilter>('all')
+  const [tagFilter, setTagFilter] = useState<string>('all')
+  const [allTags, setAllTags] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<BookRecord | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -166,8 +170,12 @@ export function Library() {
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const all = await getAllBooks(userId)
+      const [all, tags] = await Promise.all([
+        getAllBooks(userId),
+        getAllTags(userId),
+      ])
       setBooks(all)
+      setAllTags(tags)
     } catch (e) {
       logger.error(e)
       toast.error('Не удалось загрузить библиотеку')
@@ -529,6 +537,10 @@ export function Library() {
       if (favoriteFilter === 'favorites') return b.favorite
       return true
     })
+    .filter((b) => {
+      if (tagFilter !== 'all') return b.tags?.includes(tagFilter)
+      return true
+    })
     .filter(
       (b) =>
         b.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -540,7 +552,7 @@ export function Library() {
       if (sort === 'progress') return (b.progress ?? 0) - (a.progress ?? 0)
       if (sort === 'rating') return (b.rating ?? 0) - (a.rating ?? 0)
       return (b.lastOpenedAt ?? 0) - (a.lastOpenedAt ?? 0)
-    }), [books, formatFilter, statusFilter, favoriteFilter, search, sort])
+    }), [books, formatFilter, statusFilter, favoriteFilter, tagFilter, search, sort])
 
   const stats = {
     total: books.length,
@@ -573,14 +585,17 @@ export function Library() {
       })
     if (favoriteFilter !== 'all')
       list.push({ key: 'favorite', label: 'Только избранные', clear: () => setFavoriteFilter('all') })
+    if (tagFilter !== 'all')
+      list.push({ key: 'tag', label: `Тег: ${tagFilter}`, clear: () => setTagFilter('all') })
     return list
-  }, [search, formatFilter, statusFilter, favoriteFilter])
+  }, [search, formatFilter, statusFilter, favoriteFilter, tagFilter])
 
   const clearAllFilters = useCallback(() => {
     setSearch('')
     setFormatFilter('all')
     setStatusFilter('all')
     setFavoriteFilter('all')
+    setTagFilter('all')
   }, [])
 
   const filtersOn = activeFilters.length > 0
@@ -836,6 +851,24 @@ export function Library() {
                   <DropdownMenuRadioItem value="favorites">
                     <Heart className="h-4 w-4 mr-2" /> Избранные
                   </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Теги</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={tagFilter}
+                  onValueChange={(v) => setTagFilter(v)}
+                >
+                  <DropdownMenuRadioItem value="all">
+                    Все книги ({books.length})
+                  </DropdownMenuRadioItem>
+                  {allTags.map((tag) => {
+                    const count = books.filter((b) => b.tags?.includes(tag)).length
+                    return count > 0 ? (
+                      <DropdownMenuRadioItem key={tag} value={tag}>
+                        {tag} ({count})
+                      </DropdownMenuRadioItem>
+                    ) : null
+                  })}
                 </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>Статус</DropdownMenuLabel>
@@ -1122,6 +1155,19 @@ export function Library() {
         onReparseMeta={() => {
           if (detailsTarget) return handleReparseMeta(detailsTarget.id)
         }}
+        onSaveTags={(tags) => {
+          if (!detailsTarget) return
+          const id = detailsTarget.id
+          updateBook(id, { tags })
+            .then(() => {
+              setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, tags } : b)))
+              setDetailsTarget((prev) => (prev && prev.id === id ? { ...prev, tags } : prev))
+            })
+            .catch((e) => {
+              logger.error('Tags save failed', e)
+              toast.error('Ошибка сохранения')
+            })
+        }}
       />
     </div>
   )
@@ -1301,6 +1347,23 @@ const BookCard = memo(function BookCard({
             {stars}
           </p>
         )}
+        {book.tags && book.tags.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1 overflow-hidden max-h-[1.5rem]">
+            {book.tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground"
+              >
+                {tag}
+              </span>
+            ))}
+            {book.tags.length > 3 && (
+              <span className="text-[10px] text-muted-foreground self-center">
+                +{book.tags.length - 3}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </Card>
   )
@@ -1395,6 +1458,7 @@ function BookDetailsDialog({
   onMarkAsRead,
   onSaveMeta,
   onReparseMeta,
+  onSaveTags,
 }: {
   book: BookRecord | null
   sessions: ReadingSession[]
@@ -1408,12 +1472,14 @@ function BookDetailsDialog({
   onMarkAsRead: () => void
   onSaveMeta: (title: string, author: string) => void
   onReparseMeta: () => void
+  onSaveTags: (tags: string[]) => void
 }) {
   const [hoverRating, setHoverRating] = useState(0)
   const [editing, setEditing] = useState(false)
   const [draftTitle, setDraftTitle] = useState('')
   const [draftAuthor, setDraftAuthor] = useState('')
   const [reparsing, setReparsing] = useState(false)
+  const [newTag, setNewTag] = useState('')
   if (!book) return null
 
   const bookSessions = sessions.filter((s) => s.bookId === book.id)
@@ -1449,6 +1515,20 @@ function BookDetailsDialog({
     } finally {
       setReparsing(false)
     }
+  }
+
+  const addTag = () => {
+    const tag = newTag.trim().toLowerCase()
+    if (!tag) return
+    const existing = book.tags ?? []
+    if (existing.includes(tag)) return
+    onSaveTags([...existing, tag])
+    setNewTag('')
+  }
+
+  const removeTag = (tag: string) => {
+    const existing = book.tags ?? []
+    onSaveTags(existing.filter((t) => t !== tag))
   }
 
   return (
@@ -1610,6 +1690,52 @@ function BookDetailsDialog({
             </p>
           </div>
         )}
+
+        {/* Tags */}
+        <div className="mt-2">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1.5">Теги</p>
+          <div className="flex flex-wrap gap-1.5">
+            {(book.tags ?? []).map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
+              >
+                {tag}
+                <button
+                  onClick={() => removeTag(tag)}
+                  className="rounded-full p-0.5 hover:bg-muted"
+                  aria-label={`Удалить тег ${tag}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="mt-1.5 flex gap-1.5">
+            <Input
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              placeholder="Новый тег"
+              aria-label="Новый тег"
+              className="h-7 flex-1 text-xs"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  addTag()
+                }
+              }}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs"
+              onClick={addTag}
+              disabled={!newTag.trim()}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
 
         {/* Metadata grid */}
         <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
